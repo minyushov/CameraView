@@ -503,25 +503,30 @@ class Camera1 extends CameraController implements Camera.PreviewCallback, Camera
                 final boolean outputFlip = mFacing == Facing.FRONT;
                 Camera.Parameters params = mCamera.getParameters();
                 params.setRotation(sensorToOutput);
-                mCamera.setParameters(params);
-                mCamera.takePicture(
-                        new Camera.ShutterCallback() {
-                            @Override
-                            public void onShutter() {
-                                mCameraCallbacks.onShutter(false);
-                            }
-                        },
-                        null,
-                        null,
-                        new Camera.PictureCallback() {
-                            @Override
-                            public void onPictureTaken(byte[] data, final Camera camera) {
-                                mIsCapturingImage = false;
-                                mCameraCallbacks.processImage(data, outputMatchesView, outputFlip);
-                                camera.startPreview(); // This is needed, read somewhere in the docs.
-                            }
-                        }
-                );
+                try {
+                    mCamera.setParameters(params);
+                    mCamera.takePicture(
+                      new Camera.ShutterCallback() {
+                          @Override
+                          public void onShutter() {
+                              mCameraCallbacks.onShutter(false);
+                          }
+                      },
+                      null,
+                      null,
+                      new Camera.PictureCallback() {
+                          @Override
+                          public void onPictureTaken(byte[] data, final Camera camera) {
+                              mIsCapturingImage = false;
+                              mCameraCallbacks.processImage(data, outputMatchesView, outputFlip);
+                              camera.startPreview(); // This is needed, read somewhere in the docs.
+                          }
+                      }
+                    );
+                } catch (Exception exception) {
+                    mIsCapturingImage = false;
+                    mCameraCallbacks.dispatchError(new CameraException(exception));
+                }
             }
         });
     }
