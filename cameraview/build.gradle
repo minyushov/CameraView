@@ -42,7 +42,7 @@ bintrayUpload {
     artifactId = "cameraview"
     version = "1.5.2"
     vcsUrl = "https://github.com/minyushov/CameraView.git"
-    license = "MIT License"
+    license = "MIT"
     docsSettings {
         project.android.libraryVariants.all { variant ->
             if (variant.name == 'release') {
