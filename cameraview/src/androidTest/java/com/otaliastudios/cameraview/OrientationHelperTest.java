@@ -1,8 +1,8 @@
 package com.otaliastudios.cameraview;
 
 
-import android.support.test.filters.SmallTest;
-import android.support.test.runner.AndroidJUnit4;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.SmallTest;
 import android.view.OrientationEventListener;
 
 import org.junit.After;
@@ -88,6 +88,11 @@ public class OrientationHelperTest extends BaseTest {
         verify(callback, times(1)).onDeviceOrientationChanged(180);
 
         helper.mListener.onOrientationChanged(270);
+        assertEquals(helper.getDeviceOrientation(), 270);
+        verify(callback, times(1)).onDeviceOrientationChanged(270);
+
+        // It is still 270 after ORIENTATION_UNKNOWN
+        helper.mListener.onOrientationChanged(OrientationEventListener.ORIENTATION_UNKNOWN);
         assertEquals(helper.getDeviceOrientation(), 270);
         verify(callback, times(1)).onDeviceOrientationChanged(270);
     }

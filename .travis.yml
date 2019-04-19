@@ -6,6 +6,8 @@ branches:
   only:
     - master
     - /^v\d+\.\d+\.\d+$/
+    - /^v\d+\.\d+\.\d+-beta\d+$/
+    - /^v\d+\.\d+\.\d+-rc\d+$/
 
 sudo: false
 
@@ -24,9 +26,9 @@ android:
   components:
     - tools
     - platform-tools
-    - build-tools-27.0.3
-    - android-27
-    - doc-27
+    - build-tools-28.0.2
+    - android-28
+    - doc-28
 
 install:
   # Setup

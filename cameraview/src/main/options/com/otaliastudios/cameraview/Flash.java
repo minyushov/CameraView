@@ -1,6 +1,8 @@
 package com.otaliastudios.cameraview;
 
 
+import androidx.annotation.Nullable;
+
 /**
  * Flash value indicates the flash mode to be used.
  *
@@ -51,6 +53,7 @@ public enum Flash implements Control {
         return value;
     }
 
+    @Nullable
     static Flash fromValue(int value) {
         Flash[] list = Flash.values();
         for (Flash action : list) {

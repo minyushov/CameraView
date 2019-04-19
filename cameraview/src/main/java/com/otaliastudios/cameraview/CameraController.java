@@ -4,17 +4,16 @@ import android.graphics.PointF;
 import android.location.Location;
 
 
-import android.media.CamcorderProfile;
-import android.media.MediaRecorder;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.annotation.WorkerThread;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
+import androidx.annotation.WorkerThread;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 abstract class CameraController implements
@@ -30,6 +29,10 @@ abstract class CameraController implements
     static final int STATE_STARTING = 1; // Camera is about to start.
     static final int STATE_STARTED = 2; // Camera is available and we can set parameters.
 
+    static final int REF_SENSOR = 0;
+    static final int REF_VIEW = 1;
+    static final int REF_OUTPUT = 2;
+
     protected final CameraView.CameraCallbacks mCameraCallbacks;
     protected CameraPreview mPreview;
     protected WorkerHandler mHandler;
@@ -38,9 +41,8 @@ abstract class CameraController implements
     protected Facing mFacing;
     protected Flash mFlash;
     protected WhiteBalance mWhiteBalance;
-    protected VideoQuality mVideoQuality;
     protected VideoCodec mVideoCodec;
-    protected SessionType mSessionType;
+    protected Mode mMode;
     protected Hdr mHdr;
     protected Location mLocation;
     protected Audio mAudio;
@@ -48,26 +50,32 @@ abstract class CameraController implements
     protected float mExposureCorrectionValue;
     protected boolean mPlaySounds;
 
+    @Nullable private SizeSelector mPreviewStreamSizeSelector;
+    private SizeSelector mPictureSizeSelector;
+    private SizeSelector mVideoSizeSelector;
+
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    int mSnapshotMaxWidth = Integer.MAX_VALUE; // in REF_VIEW for consistency with SizeSelectors
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    int mSnapshotMaxHeight = Integer.MAX_VALUE; // in REF_VIEW for consistency with SizeSelectors
+
     protected int mCameraId;
-    protected ExtraProperties mExtraProperties;
     protected CameraOptions mCameraOptions;
     protected Mapper mMapper;
     protected FrameManager mFrameManager;
-    protected SizeSelector mPictureSizeSelector;
-    protected MediaRecorder mMediaRecorder;
-    protected File mVideoFile;
+    protected PictureRecorder mPictureRecorder;
+    protected VideoRecorder mVideoRecorder;
     protected long mVideoMaxSize;
     protected int mVideoMaxDuration;
-    protected Size mPictureSize;
-    protected Size mPreviewSize;
+    protected int mVideoBitRate;
+    protected int mAudioBitRate;
+    protected Size mCaptureSize;
+    protected Size mPreviewStreamSize;
     protected int mPreviewFormat;
 
     protected int mSensorOffset;
     private int mDisplayOffset;
     private int mDeviceOrientation;
-
-    protected boolean mIsCapturingImage = false;
-    protected boolean mIsCapturingVideo = false;
 
     protected int mState = STATE_STOPPED;
 
@@ -78,7 +86,6 @@ abstract class CameraController implements
     Task<Void> mWhiteBalanceTask = new Task<>();
     Task<Void> mHdrTask = new Task<>();
     Task<Void> mLocationTask = new Task<>();
-    Task<Void> mVideoQualityTask = new Task<>();
     Task<Void> mStartVideoTask = new Task<>();
     Task<Void> mPlaySoundsTask = new Task<>();
 
@@ -90,7 +97,7 @@ abstract class CameraController implements
         mFrameManager = new FrameManager(2, this);
     }
 
-    void setPreview(CameraPreview cameraPreview) {
+    void setPreview(@NonNull CameraPreview cameraPreview) {
         mPreview = cameraPreview;
         mPreview.setSurfaceCallback(this);
     }
@@ -144,7 +151,8 @@ abstract class CameraController implements
         }
     }
 
-    final void destroy() {
+    // Public & not final so we can verify with mockito in CameraViewTest
+    public void destroy() {
         LOG.i("destroy:", "state:", ss());
         // Prevent CameraController leaks. Don't set to null, or exceptions
         // inside the standard stop() method might crash the main thread.
@@ -157,6 +165,7 @@ abstract class CameraController implements
 
     //region Start&Stop
 
+    @NonNull
     private String ss() {
         switch (mState) {
             case STATE_STOPPING: return "STATE_STOPPING";
@@ -193,7 +202,8 @@ abstract class CameraController implements
     }
 
     // Stops the preview asynchronously.
-    final void stop() {
+    // Public & not final so we can verify with mockito in CameraViewTest
+    public void stop() {
         LOG.i("Stop:", "posting runnable. State:", ss());
         mHandler.post(new Runnable() {
             @Override
@@ -228,6 +238,7 @@ abstract class CameraController implements
     }
 
     // Forces a restart.
+    @SuppressWarnings("WeakerAccess")
     protected final void restart() {
         LOG.i("Restart:", "posting runnable");
         mHandler.post(new Runnable() {
@@ -288,8 +299,16 @@ abstract class CameraController implements
         mDeviceOrientation = deviceOrientation;
     }
 
-    final void setPictureSizeSelector(SizeSelector selector) {
+    final void setPreviewStreamSizeSelector(@Nullable SizeSelector selector) {
+        mPreviewStreamSizeSelector = selector;
+    }
+
+    final void setPictureSizeSelector(@NonNull SizeSelector selector) {
         mPictureSizeSelector = selector;
+    }
+
+    final void setVideoSizeSelector(@NonNull SizeSelector selector) {
+        mVideoSizeSelector = selector;
     }
 
     final void setVideoMaxSize(long videoMaxSizeBytes) {
@@ -300,54 +319,68 @@ abstract class CameraController implements
         mVideoMaxDuration = videoMaxDurationMillis;
     }
 
-    final void setVideoCodec(VideoCodec codec) {
+    final void setVideoCodec(@NonNull VideoCodec codec) {
         mVideoCodec = codec;
     }
 
+    final void setVideoBitRate(int videoBitRate) {
+        mVideoBitRate = videoBitRate;
+    }
+
+    final void setAudioBitRate(int audioBitRate) {
+        mAudioBitRate = audioBitRate;
+    }
+
+    final void setSnapshotMaxWidth(int maxWidth) {
+        mSnapshotMaxWidth = maxWidth;
+    }
+
+    final void setSnapshotMaxHeight(int maxHeight) {
+        mSnapshotMaxHeight = maxHeight;
+    }
 
     //endregion
 
     //region Abstract setters and APIs
 
     // Should restart the session if active.
-    abstract void setSessionType(SessionType sessionType);
+    abstract void setMode(@NonNull Mode mode);
 
     // Should restart the session if active.
-    abstract void setFacing(Facing facing);
+    abstract void setFacing(@NonNull Facing facing);
 
     // If closed, no-op. If opened, check supported and apply.
-    abstract void setZoom(float zoom, PointF[] points, boolean notify);
+    abstract void setZoom(float zoom, @Nullable PointF[] points, boolean notify);
 
     // If closed, no-op. If opened, check supported and apply.
-    abstract void setExposureCorrection(float EVvalue, float[] bounds, PointF[] points, boolean notify);
+    abstract void setExposureCorrection(float EVvalue, @NonNull float[] bounds, @Nullable PointF[] points, boolean notify);
 
     // If closed, keep. If opened, check supported and apply.
-    abstract void setFlash(Flash flash);
+    abstract void setFlash(@NonNull Flash flash);
 
     // If closed, keep. If opened, check supported and apply.
-    abstract void setWhiteBalance(WhiteBalance whiteBalance);
+    abstract void setWhiteBalance(@NonNull WhiteBalance whiteBalance);
 
     // If closed, keep. If opened, check supported and apply.
-    abstract void setHdr(Hdr hdr);
+    abstract void setHdr(@NonNull Hdr hdr);
 
     // If closed, keep. If opened, check supported and apply.
-    abstract void setLocation(Location location);
+    abstract void setLocation(@Nullable Location location);
 
     // Just set.
-    abstract void setAudio(Audio audio);
+    abstract void setAudio(@NonNull Audio audio);
 
-    // Throw if capturing. If in video session, recompute capture size, and, if needed, preview size.
-    abstract void setVideoQuality(VideoQuality videoQuality);
+    abstract void takePicture();
 
-    abstract void capturePicture();
+    abstract void takePictureSnapshot(@NonNull AspectRatio viewAspectRatio);
 
-    abstract void captureSnapshot();
+    abstract void takeVideo(@NonNull File file);
 
-    abstract void startVideo(@NonNull File file);
+    abstract void takeVideoSnapshot(@NonNull File file, @NonNull AspectRatio viewAspectRatio);
 
-    abstract void endVideo();
+    abstract void stopVideo();
 
-    abstract void startAutoFocus(@Nullable Gesture gesture, PointF point);
+    abstract void startAutoFocus(@Nullable Gesture gesture, @NonNull PointF point);
 
     abstract void setPlaySounds(boolean playSounds);
 
@@ -356,33 +389,31 @@ abstract class CameraController implements
     //region final getters
 
     @Nullable
-    final ExtraProperties getExtraProperties() {
-        return mExtraProperties;
-    }
-
-    @Nullable
     final CameraOptions getCameraOptions() {
         return mCameraOptions;
     }
 
+    @NonNull
     final Facing getFacing() {
         return mFacing;
     }
 
+    @NonNull
     final Flash getFlash() {
         return mFlash;
     }
 
+    @NonNull
     final WhiteBalance getWhiteBalance() {
         return mWhiteBalance;
     }
 
-    final VideoQuality getVideoQuality() {
-        return mVideoQuality;
-    }
-
     final VideoCodec getVideoCodec() {
         return mVideoCodec;
+    }
+
+    final int getVideoBitRate() {
+        return mVideoBitRate;
     }
 
     final long getVideoMaxSize() {
@@ -393,28 +424,43 @@ abstract class CameraController implements
         return mVideoMaxDuration;
     }
 
-    final SessionType getSessionType() {
-        return mSessionType;
+    @NonNull
+    final Mode getMode() {
+        return mMode;
     }
 
+    @NonNull
     final Hdr getHdr() {
         return mHdr;
     }
 
+    @Nullable
     final Location getLocation() {
         return mLocation;
     }
 
+    @NonNull
     final Audio getAudio() {
         return mAudio;
     }
 
-    final SizeSelector getPictureSizeSelector() {
+    final int getAudioBitRate() {
+        return mAudioBitRate;
+    }
+
+    @Nullable
+    /* for tests */ final SizeSelector getPreviewStreamSizeSelector() {
+        return mPreviewStreamSizeSelector;
+    }
+
+    @NonNull
+    /* for tests */ final SizeSelector getPictureSizeSelector() {
         return mPictureSizeSelector;
     }
 
-    final Size getPictureSize() {
-        return mPictureSize;
+    @NonNull
+    /* for tests */ final SizeSelector getVideoSizeSelector() {
+        return mVideoSizeSelector;
     }
 
     final float getZoomValue() {
@@ -425,55 +471,123 @@ abstract class CameraController implements
         return mExposureCorrectionValue;
     }
 
-    final Size getPreviewSize() {
-        return mPreviewSize;
+    final boolean isTakingVideo() {
+        return mVideoRecorder != null;
     }
 
-    final boolean isCapturingVideo() {
-        return mIsCapturingVideo;
+    final boolean isTakingPicture() {
+        return mPictureRecorder != null;
     }
 
     //endregion
 
     //region Orientation utils
 
-    /**
-     * The result of this should not change after start() is called: the sensor offset is the same,
-     * and the display offset does not change.
-     */
-    final boolean shouldFlipSizes() {
-        int offset = computeSensorToViewOffset();
-        LOG.i("shouldFlipSizes:", "displayOffset=", mDisplayOffset, "sensorOffset=", mSensorOffset);
-        LOG.i("shouldFlipSizes:", "sensorToDisplay=", offset);
-        return offset % 180 != 0;
-    }
-
-    /**
-     * Returns how much should the sensor image be rotated before being shown.
-     * It is meant to be fed to Camera.setDisplayOrientation().
-     * The result of this should not change after start() is called: the sensor offset is the same,
-     * and the display offset does not change.
-     */
-    protected final int computeSensorToViewOffset() {
+    private int computeSensorToViewOffset() {
         if (mFacing == Facing.FRONT) {
-            // Here we had ((mSensorOffset - mDisplayOffset) + 360 + 180) % 360
-            // And it seemed to give the same results for various combinations, but not for all (e.g. 0 - 270).
             return (360 - ((mSensorOffset + mDisplayOffset) % 360)) % 360;
         } else {
             return (mSensorOffset - mDisplayOffset + 360) % 360;
         }
     }
 
-    /**
-     * Returns the orientation to be set as a exif tag.
-     */
-    protected final int computeSensorToOutputOffset() {
+    private int computeSensorToOutputOffset() {
         if (mFacing == Facing.FRONT) {
             return (mSensorOffset - mDeviceOrientation + 360) % 360;
         } else {
             return (mSensorOffset + mDeviceOrientation) % 360;
         }
     }
+
+    // Returns the offset between two reference systems.
+    final int offset(int fromReference, int toReference) {
+        if (fromReference == toReference) return 0;
+        // We only know how to compute offsets with respect to REF_SENSOR.
+        // That's why we separate the two cases.
+        if (fromReference == REF_SENSOR) {
+            return toReference == REF_VIEW ?
+                    computeSensorToViewOffset() :
+                    computeSensorToOutputOffset();
+        }
+        // Maybe the sensor is the other.
+        if (toReference == REF_SENSOR) {
+            return (-offset(toReference, fromReference) + 360) % 360;
+        }
+        // None of them is the sensor. Use a difference.
+        return (offset(REF_SENSOR, toReference) - offset(REF_SENSOR, fromReference) + 360) % 360;
+    }
+
+    final boolean flip(int reference1, int reference2) {
+        return offset(reference1, reference2) % 180 != 0;
+    }
+
+    @Nullable
+    final Size getPictureSize(@SuppressWarnings("SameParameterValue") int reference) {
+        if (mCaptureSize == null || mMode == Mode.VIDEO) return null;
+        return flip(REF_SENSOR, reference) ? mCaptureSize.flip() : mCaptureSize;
+    }
+
+    @Nullable
+    final Size getVideoSize(@SuppressWarnings("SameParameterValue") int reference) {
+        if (mCaptureSize == null || mMode == Mode.PICTURE) return null;
+        return flip(REF_SENSOR, reference) ? mCaptureSize.flip() : mCaptureSize;
+    }
+
+    @Nullable
+    final Size getPreviewStreamSize(int reference) {
+        if (mPreviewStreamSize == null) return null;
+        return flip(REF_SENSOR, reference) ? mPreviewStreamSize.flip() : mPreviewStreamSize;
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    @Nullable
+    final Size getPreviewSurfaceSize(int reference) {
+        if (mPreview == null) return null;
+        return flip(REF_VIEW, reference) ? mPreview.getSurfaceSize().flip() : mPreview.getSurfaceSize();
+    }
+
+    /**
+     * Returns the snapshot size, but not cropped with the view dimensions, which
+     * is what we will do before creating the snapshot. However, cropping is done at various
+     * levels so we don't want to perform the op here.
+     *
+     * The base snapshot size is based on PreviewStreamSize (later cropped with view ratio). Why?
+     * One might be tempted to say that it is the SurfaceSize (which already matches the view ratio).
+     *
+     * The camera sensor will capture preview frames with PreviewStreamSize and that's it. Then they
+     * are hardware-scaled by the preview surface, but this does not affect the snapshot, as the
+     * snapshot recorder simply creates another surface.
+     *
+     * Done tests to ensure that this is true, by using
+     * 1. small SurfaceSize and biggest() PreviewStreamSize: output is not low quality
+     * 2. big SurfaceSize and smallest() PreviewStreamSize: output is low quality
+     * In both cases the result.size here was set to the biggest of the two.
+     *
+     * I could not find the same evidence for videos, but I would say that the same things should
+     * apply, despite the capturing mechanism being different.
+     */
+    @Nullable
+    final Size getUncroppedSnapshotSize(int reference) {
+        Size baseSize = getPreviewStreamSize(reference);
+        if (baseSize == null) return null;
+        boolean flip = flip(reference, REF_VIEW);
+        int maxWidth = flip ? mSnapshotMaxHeight : mSnapshotMaxWidth;
+        int maxHeight = flip ? mSnapshotMaxWidth : mSnapshotMaxHeight;
+        float baseRatio = AspectRatio.of(baseSize).toFloat();
+        float maxValuesRatio = AspectRatio.of(maxWidth, maxHeight).toFloat();
+        if (maxValuesRatio >= baseRatio) {
+            // Height is the real constraint.
+            int outHeight = Math.min(baseSize.getHeight(), maxHeight);
+            int outWidth = (int) Math.floor((float) outHeight * baseRatio);
+            return new Size(outWidth, outHeight);
+        } else {
+            // Width is the real constraint.
+            int outWidth = Math.min(baseSize.getWidth(), maxWidth);
+            int outHeight = (int) Math.floor((float) outWidth / baseRatio);
+            return new Size(outWidth, outHeight);
+        }
+    }
+
 
     //endregion
 
@@ -486,101 +600,77 @@ abstract class CameraController implements
      * But when it does, the {@link CameraPreview.SurfaceCallback} should be called,
      * and this should be refreshed.
      */
-    protected final Size computePictureSize() {
-        // The external selector is expecting stuff in the view world, not in the sensor world.
-        // Use the list in the camera options, then flip the result if needed.
-        boolean flip = shouldFlipSizes();
-        SizeSelector selector;
-
-        if (mSessionType == SessionType.PICTURE) {
-            selector = SizeSelectors.or(mPictureSizeSelector, SizeSelectors.biggest());
-        } else {
-            // The Camcorder internally checks for cameraParameters.getSupportedVideoSizes() etc.
-            // And we want the picture size to be the biggest picture consistent with the video aspect ratio.
-            // -> Use the external picture selector, but enforce the ratio constraint.
-            CamcorderProfile profile = getCamcorderProfile();
-            AspectRatio targetRatio = AspectRatio.of(profile.videoFrameWidth, profile.videoFrameHeight);
-            if (flip) targetRatio = targetRatio.inverse();
-            LOG.i("size:", "computeCaptureSize:", "videoQuality:", mVideoQuality, "targetRatio:", targetRatio);
-            SizeSelector matchRatio = SizeSelectors.aspectRatio(targetRatio, 0);
-            selector = SizeSelectors.or(
-                    SizeSelectors.and(matchRatio, mPictureSizeSelector),
-                    SizeSelectors.and(matchRatio),
-                    mPictureSizeSelector
-            );
-        }
-
-        List<Size> list = new ArrayList<>(mCameraOptions.getSupportedPictureSizes());
-        Size result = selector.select(list).get(0);
-        LOG.i("computePictureSize:", "result:", result, "flip:", flip);
-        if (flip) result = result.flip();
-        return result;
+    @NonNull
+    @SuppressWarnings("WeakerAccess")
+    protected final Size computeCaptureSize() {
+        return computeCaptureSize(mMode);
     }
 
-    protected final Size computePreviewSize(List<Size> previewSizes) {
-        // instead of flipping everything to the view world, we can just flip the
-        // surface size to the sensor world
-        boolean flip = shouldFlipSizes();
-        AspectRatio targetRatio = AspectRatio.of(mPictureSize.getWidth(), mPictureSize.getHeight());
-        Size targetMinSize = mPreview.getSurfaceSize();
-        if (flip) targetMinSize = targetMinSize.flip();
-        LOG.i("size:", "computePreviewSize:", "targetRatio:", targetRatio, "targetMinSize:", targetMinSize);
-        SizeSelector matchRatio = SizeSelectors.aspectRatio(targetRatio, 0);
-        SizeSelector matchSize = SizeSelectors.and(
-                SizeSelectors.minHeight(targetMinSize.getHeight()),
-                SizeSelectors.minWidth(targetMinSize.getWidth()));
-        SizeSelector matchAll = SizeSelectors.or(
-                SizeSelectors.and(matchRatio, matchSize),
-                SizeSelectors.and(matchRatio, SizeSelectors.biggest()), // If couldn't match both, match ratio and biggest.
-                SizeSelectors.biggest() // If couldn't match any, take the biggest.
-        );
-        Size result = matchAll.select(previewSizes).get(0);
-        LOG.i("computePreviewSize:", "result:", result, "flip:", flip);
+    @SuppressWarnings("WeakerAccess")
+    protected final Size computeCaptureSize(Mode mode) {
+        // We want to pass stuff into the REF_VIEW reference, not the sensor one.
+        // This is already managed by CameraOptions, so we just flip again at the end.
+        boolean flip = flip(REF_SENSOR, REF_VIEW);
+        SizeSelector selector;
+        Collection<Size> sizes;
+        if (mode == Mode.PICTURE) {
+            selector = mPictureSizeSelector;
+            sizes = mCameraOptions.getSupportedPictureSizes();
+        } else {
+            selector = mVideoSizeSelector;
+            sizes = mCameraOptions.getSupportedVideoSizes();
+        }
+        selector = SizeSelectors.or(selector, SizeSelectors.biggest());
+        List<Size> list = new ArrayList<>(sizes);
+        Size result = selector.select(list).get(0);
+        LOG.i("computeCaptureSize:", "result:", result, "flip:", flip, "mode:", mode);
+        if (flip) result = result.flip(); // Go back to REF_SENSOR
         return result;
     }
 
     @NonNull
-    protected final CamcorderProfile getCamcorderProfile() {
-        switch (mVideoQuality) {
-            case HIGHEST:
-                return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_HIGH);
-
-            case MAX_2160P:
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
-                        CamcorderProfile.hasProfile(CamcorderProfile.QUALITY_2160P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_2160P);
-                }
-                // Don't break.
-
-            case MAX_1080P:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_1080P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_1080P);
-                }
-                // Don't break.
-
-            case MAX_720P:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_720P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_720P);
-                }
-                // Don't break.
-
-            case MAX_480P:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_480P)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_480P);
-                }
-                // Don't break.
-
-            case MAX_QVGA:
-                if (CamcorderProfile.hasProfile(mCameraId, CamcorderProfile.QUALITY_QVGA)) {
-                    return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_QVGA);
-                }
-                // Don't break.
-
-            case LOWEST:
-            default:
-                // Fallback to lowest.
-                return CamcorderProfile.get(mCameraId, CamcorderProfile.QUALITY_LOW);
+    @SuppressWarnings("WeakerAccess")
+    protected final Size computePreviewStreamSize(@NonNull List<Size> previewSizes) {
+        // These sizes come in REF_SENSOR. Since there is an external selector involved,
+        // we must convert all of them to REF_VIEW, then flip back when returning.
+        boolean flip = flip(REF_SENSOR, REF_VIEW);
+        List<Size> sizes = new ArrayList<>(previewSizes.size());
+        for (Size size : previewSizes) {
+            sizes.add(flip ? size.flip() : size);
         }
+
+        // Create our own default selector, which will be used if the external mPreviewStreamSizeSelector
+        // is null, or if it fails in finding a size.
+        Size targetMinSize = getPreviewSurfaceSize(REF_VIEW);
+        AspectRatio targetRatio = AspectRatio.of(mCaptureSize.getWidth(), mCaptureSize.getHeight());
+        if (flip) targetRatio = targetRatio.inverse();
+        LOG.i("size:", "computePreviewStreamSize:", "targetRatio:", targetRatio, "targetMinSize:", targetMinSize);
+        SizeSelector matchRatio = SizeSelectors.and( // Match this aspect ratio and sort by biggest
+                SizeSelectors.aspectRatio(targetRatio, 0),
+                SizeSelectors.biggest());
+        SizeSelector matchSize = SizeSelectors.and( // Bigger than this size, and sort by smallest
+                SizeSelectors.minHeight(targetMinSize.getHeight()),
+                SizeSelectors.minWidth(targetMinSize.getWidth()),
+                SizeSelectors.smallest());
+        SizeSelector matchAll = SizeSelectors.or(
+                SizeSelectors.and(matchRatio, matchSize), // Try to respect both constraints.
+                matchSize, // If couldn't match aspect ratio, at least respect the size
+                matchRatio, // If couldn't respect size, at least match aspect ratio
+                SizeSelectors.biggest() // If couldn't match any, take the biggest.
+        );
+
+        // Apply the external selector with this as a fallback,
+        // and return a size in REF_SENSOR reference.
+        SizeSelector selector;
+        if (mPreviewStreamSizeSelector != null) {
+            selector = SizeSelectors.or(mPreviewStreamSizeSelector, matchAll);
+        } else {
+            selector = matchAll;
+        }
+        Size result = selector.select(sizes).get(0);
+        if (flip) result = result.flip();
+        LOG.i("computePreviewStreamSize:", "result:", result, "flip:", flip);
+        return result;
     }
 
     //endregion

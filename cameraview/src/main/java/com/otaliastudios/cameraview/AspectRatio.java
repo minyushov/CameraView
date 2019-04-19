@@ -1,9 +1,6 @@
 package com.otaliastudios.cameraview;
 
-import android.os.Parcel;
-import android.os.Parcelable;
-import android.support.annotation.NonNull;
-import android.util.SparseArray;
+import androidx.annotation.NonNull;
 
 import java.util.HashMap;
 
@@ -16,11 +13,22 @@ public class AspectRatio implements Comparable<AspectRatio> {
     final static HashMap<String, AspectRatio> sCache = new HashMap<>(16);
 
     /**
+     * Creates an aspect ratio for the given size.
+     * @param size the size
+     * @return a (possibly cached) aspect ratio
+     */
+    @NonNull
+    public static AspectRatio of(Size size) {
+        return AspectRatio.of(size.getWidth(), size.getHeight());
+    }
+
+    /**
      * Creates an aspect ratio with the given values.
      * @param x the width
      * @param y the height
      * @return a (possibly cached) aspect ratio
      */
+    @NonNull
     public static AspectRatio of(int x, int y) {
         int gcd = gcd(x, y);
         x /= gcd;
@@ -41,6 +49,8 @@ public class AspectRatio implements Comparable<AspectRatio> {
      * @param string a string of the format x:y where x and y are integers
      * @return a (possibly cached) aspect ratio
      */
+    @NonNull
+    @SuppressWarnings("WeakerAccess")
     public static AspectRatio parse(@NonNull String string) {
         String[] parts = string.split(":");
         if (parts.length != 2) {
@@ -67,7 +77,8 @@ public class AspectRatio implements Comparable<AspectRatio> {
         return mY;
     }
 
-    public boolean matches(Size size) {
+    @SuppressWarnings("WeakerAccess")
+    public boolean matches(@NonNull Size size) {
         int gcd = gcd(size.getWidth(), size.getHeight());
         int x = size.getWidth() / gcd;
         int y = size.getHeight() / gcd;
@@ -94,6 +105,7 @@ public class AspectRatio implements Comparable<AspectRatio> {
         return mX + ":" + mY;
     }
 
+    @SuppressWarnings("WeakerAccess")
     public float toFloat() {
         return (float) mX / mY;
     }
@@ -114,6 +126,7 @@ public class AspectRatio implements Comparable<AspectRatio> {
     }
 
     @SuppressWarnings("SuspiciousNameCombination")
+    @NonNull
     public AspectRatio inverse() {
         return AspectRatio.of(mY, mX);
     }

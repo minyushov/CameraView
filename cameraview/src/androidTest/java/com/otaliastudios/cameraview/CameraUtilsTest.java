@@ -1,16 +1,13 @@
 package com.otaliastudios.cameraview;
 
 
-import android.annotation.TargetApi;
-import android.app.Instrumentation;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.support.test.InstrumentationRegistry;
-import android.support.test.filters.SmallTest;
-import android.support.test.internal.runner.InstrumentationConnection;
-import android.support.test.runner.AndroidJUnit4;
+
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.SmallTest;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -49,7 +46,7 @@ public class CameraUtilsTest extends BaseTest {
         final byte[] data = os.toByteArray();
 
         final Task<Bitmap> decode = new Task<>(true);
-        final CameraUtils.BitmapCallback callback = new CameraUtils.BitmapCallback() {
+        final BitmapCallback callback = new BitmapCallback() {
             @Override
             public void onBitmapReady(Bitmap bitmap) {
                 decode.end(bitmap);
@@ -106,13 +103,13 @@ public class CameraUtilsTest extends BaseTest {
         task = encodeDecodeTask(source, Integer.MAX_VALUE, Integer.MAX_VALUE);
         other = task.await(800);
         assertNotNull(other);
-        assertTrue(other.getWidth() == width);
-        assertTrue(other.getHeight() == height);
+        assertEquals(other.getWidth(), width);
+        assertEquals(other.getHeight(), height);
 
         task = encodeDecodeTask(source, 6000, 6000);
         other = task.await(800);
         assertNotNull(other);
-        assertTrue(other.getWidth() == width);
-        assertTrue(other.getHeight() == height);
+        assertEquals(other.getWidth(), width);
+        assertEquals(other.getHeight(), height);
     }
 }

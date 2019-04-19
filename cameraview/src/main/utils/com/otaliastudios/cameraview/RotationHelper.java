@@ -1,13 +1,22 @@
 package com.otaliastudios.cameraview;
 
+import androidx.annotation.NonNull;
+
+/**
+ * This will only be used on low APIs or when GL surface is not available.
+ * This risks OOMs and was never a good tool.
+ */
+@SuppressWarnings("DeprecatedIsStillUsed")
+@Deprecated
 class RotationHelper {
 
-
-    static byte[] rotate(final byte[] yuv, final int width, final int height, final int rotation) {
+    static byte[] rotate(@NonNull final byte[] yuv, @NonNull final Size size, final int rotation) {
         if (rotation == 0) return yuv;
         if (rotation % 90 != 0 || rotation < 0 || rotation > 270) {
             throw new IllegalArgumentException("0 <= rotation < 360, rotation % 90 == 0");
         }
+        final int width = size.getWidth();
+        final int height = size.getHeight();
         final byte[] output = new byte[yuv.length];
         final int frameSize = width * height;
         final boolean swap = rotation % 180 != 0;

@@ -2,8 +2,9 @@ package com.otaliastudios.cameraview;
 
 
 import android.hardware.Camera;
-import android.support.test.filters.SmallTest;
-import android.support.test.runner.AndroidJUnit4;
+
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.SmallTest;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,7 +16,7 @@ import static org.junit.Assert.*;
 @SmallTest
 public class Mapper1Test extends BaseTest {
 
-    private Mapper mapper = new Mapper.Mapper1();
+    private Mapper mapper = new Mapper1();
 
     @Test
     public void testMap() {

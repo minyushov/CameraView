@@ -3,8 +3,8 @@ package com.otaliastudios.cameraview;
 
 import android.graphics.PointF;
 import android.location.Location;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.io.File;
 
@@ -23,8 +23,8 @@ public class MockCameraController extends CameraController {
         mCameraOptions = options;
     }
 
-    void setMockPreviewSize(Size size) {
-        mPreviewSize = size;
+    void setMockPreviewStreamSize(Size size) {
+        mPreviewStreamSize = size;
     }
 
     void mockStarted(boolean started) {
@@ -40,76 +40,76 @@ public class MockCameraController extends CameraController {
     }
 
     @Override
-    void setZoom(float zoom, PointF[] points, boolean notify) {
+    void setZoom(float zoom, @Nullable PointF[] points, boolean notify) {
         mZoomValue = zoom;
         mZoomChanged = true;
     }
 
     @Override
-    void setExposureCorrection(float EVvalue, float[] bounds, PointF[] points, boolean notify) {
+    void setExposureCorrection(float EVvalue, @NonNull float[] bounds, @Nullable PointF[] points, boolean notify) {
         mExposureCorrectionValue = EVvalue;
         mExposureCorrectionChanged = true;
     }
 
     @Override
-    void setFacing(Facing facing) {
+    void setFacing(@NonNull Facing facing) {
         mFacing = facing;
     }
 
     @Override
-    void setFlash(Flash flash) {
+    void setFlash(@NonNull Flash flash) {
         mFlash = flash;
     }
 
     @Override
-    void setWhiteBalance(WhiteBalance whiteBalance) {
+    void setWhiteBalance(@NonNull WhiteBalance whiteBalance) {
         mWhiteBalance = whiteBalance;
     }
 
     @Override
-    void setVideoQuality(VideoQuality videoQuality) {
-        mVideoQuality = videoQuality;
+    void setMode(@NonNull Mode mode) {
+        mMode = mode;
     }
 
     @Override
-    void setSessionType(SessionType sessionType) {
-        mSessionType = sessionType;
-    }
-
-    @Override
-    void setHdr(Hdr hdr) {
+    void setHdr(@NonNull Hdr hdr) {
         mHdr = hdr;
     }
 
     @Override
-    void setAudio(Audio audio) {
+    void setAudio(@NonNull Audio audio) {
         mAudio = audio;
     }
 
     @Override
-    void setLocation(Location location) {
+    void setLocation(@Nullable Location location) {
         mLocation = location;
     }
 
     @Override
-    void capturePicture() {
+    void takePicture() {
         mPictureCaptured = true;
     }
 
     @Override
-    void captureSnapshot() {
+    void takePictureSnapshot(@NonNull AspectRatio viewAspectRatio) {
     }
 
     @Override
-    void startVideo(@NonNull File file) {
+    void takeVideo(@NonNull File file) {
     }
 
     @Override
-    void endVideo() {
+    void takeVideoSnapshot(@NonNull File file, @NonNull AspectRatio viewAspectRatio) {
+
     }
 
     @Override
-    void startAutoFocus(@Nullable Gesture gesture, PointF point) {
+    void stopVideo() {
+    }
+
+    @Override
+    void startAutoFocus(@Nullable Gesture gesture, @NonNull PointF point) {
         mFocusStarted = true;
     }
 
@@ -122,7 +122,12 @@ public class MockCameraController extends CameraController {
     }
 
     @Override
-    public void onBufferAvailable(byte[] buffer) {
+    public void onSurfaceDestroyed() {
+
+    }
+
+    @Override
+    public void onBufferAvailable(@NonNull byte[] buffer) {
     }
 
     @Override

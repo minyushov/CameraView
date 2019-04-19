@@ -4,25 +4,27 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
-import android.graphics.drawable.Drawable;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+
+import androidx.annotation.ColorInt;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
 
-// TODO animate lines!
 class GridLinesLayout extends View {
 
-    private Grid gridMode;
+    private final static float GOLDEN_RATIO_INV = 0.61803398874989f;
+    public final static int DEFAULT_COLOR = Color.argb(160, 255, 255, 255);
 
-    private Drawable horiz;
-    private Drawable vert;
+    private Grid gridMode;
+    private int gridColor = DEFAULT_COLOR;
+
+    private ColorDrawable horiz;
+    private ColorDrawable vert;
     private final float width;
 
     Task<Integer> drawTask = new Task<>();
-
-    private final static float GOLDEN_RATIO_INV = 0.61803398874989f;
 
     public GridLinesLayout(@NonNull Context context) {
         this(context, null);
@@ -30,8 +32,8 @@ class GridLinesLayout extends View {
 
     public GridLinesLayout(@NonNull Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
-        horiz = new ColorDrawable(Color.WHITE); horiz.setAlpha(160);
-        vert = new ColorDrawable(Color.WHITE); vert.setAlpha(160);
+        horiz = new ColorDrawable(gridColor);
+        vert = new ColorDrawable(gridColor);
         width = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 0.9f, context.getResources().getDisplayMetrics());
     }
 
@@ -42,13 +44,25 @@ class GridLinesLayout extends View {
         vert.setBounds(0, top, (int) width, bottom);
     }
 
+    @NonNull
     public Grid getGridMode() {
         return gridMode;
     }
 
-    public void setGridMode(Grid gridMode) {
+    public void setGridMode(@NonNull Grid gridMode) {
         this.gridMode = gridMode;
         postInvalidate();
+    }
+
+    public void setGridColor(@ColorInt int gridColor) {
+        this.gridColor = gridColor;
+        horiz.setColor(gridColor);
+        vert.setColor(gridColor);
+        postInvalidate();
+    }
+
+    public int getGridColor() {
+        return gridColor;
     }
 
     private int getLineCount() {
@@ -75,7 +89,7 @@ class GridLinesLayout extends View {
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
+    protected void onDraw(@NonNull Canvas canvas) {
         super.onDraw(canvas);
         drawTask.start();
         int count = getLineCount();

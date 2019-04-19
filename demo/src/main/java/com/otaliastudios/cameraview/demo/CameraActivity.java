@@ -4,21 +4,22 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.design.widget.BottomSheetBehavior;
-import android.support.v7.app.AppCompatActivity;
+import androidx.annotation.NonNull;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import androidx.appcompat.app.AppCompatActivity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
-import android.view.WindowManager;
 import android.widget.Toast;
 
+import com.otaliastudios.cameraview.CameraException;
 import com.otaliastudios.cameraview.CameraListener;
 import com.otaliastudios.cameraview.CameraLogger;
 import com.otaliastudios.cameraview.CameraOptions;
 import com.otaliastudios.cameraview.CameraView;
-import com.otaliastudios.cameraview.SessionType;
-import com.otaliastudios.cameraview.Size;
+import com.otaliastudios.cameraview.PictureResult;
+import com.otaliastudios.cameraview.Mode;
+import com.otaliastudios.cameraview.VideoResult;
 
 import java.io.File;
 
@@ -28,36 +29,31 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     private CameraView camera;
     private ViewGroup controlPanel;
 
-    private boolean mCapturingPicture;
-    private boolean mCapturingVideo;
-
     // To show stuff in the callback
-    private Size mCaptureNativeSize;
     private long mCaptureTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
         setContentView(R.layout.activity_camera);
         CameraLogger.setLogLevel(CameraLogger.LEVEL_VERBOSE);
 
         camera = findViewById(R.id.camera);
+        camera.setLifecycleOwner(this);
         camera.addCameraListener(new CameraListener() {
-            public void onCameraOpened(CameraOptions options) { onOpened(); }
-            public void onPictureTaken(byte[] jpeg) { onPicture(jpeg); }
-
-            @Override
-            public void onVideoTaken(File video) {
-                super.onVideoTaken(video);
-                onVideo(video);
+            public void onCameraOpened(@NonNull CameraOptions options) { onOpened(options); }
+            public void onPictureTaken(@NonNull PictureResult result) { onPicture(result); }
+            public void onVideoTaken(@NonNull VideoResult result) { onVideo(result); }
+            public void onCameraError(@NonNull CameraException exception) {
+                onError(exception);
             }
         });
 
         findViewById(R.id.edit).setOnClickListener(this);
-        findViewById(R.id.capturePhoto).setOnClickListener(this);
+        findViewById(R.id.capturePicture).setOnClickListener(this);
+        findViewById(R.id.capturePictureSnapshot).setOnClickListener(this);
         findViewById(R.id.captureVideo).setOnClickListener(this);
+        findViewById(R.id.captureVideoSnapshot).setOnClickListener(this);
         findViewById(R.id.toggleCamera).setOnClickListener(this);
 
         controlPanel = findViewById(R.id.controls);
@@ -65,7 +61,8 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         Control[] controls = Control.values();
         for (Control control : controls) {
             ControlView view = new ControlView(this, control, this);
-            group.addView(view, ViewGroup.LayoutParams.MATCH_PARENT,
+            group.addView(view,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
         }
 
@@ -83,41 +80,37 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         Toast.makeText(this, content, length).show();
     }
 
-    private void onOpened() {
+    private void onOpened(CameraOptions options) {
         ViewGroup group = (ViewGroup) controlPanel.getChildAt(0);
         for (int i = 0; i < group.getChildCount(); i++) {
             ControlView view = (ControlView) group.getChildAt(i);
-            view.onCameraOpened(camera);
+            view.onCameraOpened(camera, options);
         }
     }
 
-    private void onPicture(byte[] jpeg) {
-        mCapturingPicture = false;
-        long callbackTime = System.currentTimeMillis();
-        if (mCapturingVideo) {
-            message("Captured while taking video. Size="+mCaptureNativeSize, false);
+    private void onError(@NonNull CameraException exception) {
+        message("Got CameraException #" + exception.getReason(), true);
+    }
+
+    private void onPicture(PictureResult result) {
+        if (camera.isTakingVideo()) {
+            message("Captured while taking video. Size=" + result.getSize(), false);
             return;
         }
 
         // This can happen if picture was taken with a gesture.
+        long callbackTime = System.currentTimeMillis();
         if (mCaptureTime == 0) mCaptureTime = callbackTime - 300;
-        if (mCaptureNativeSize == null) mCaptureNativeSize = camera.getPictureSize();
-
-        PicturePreviewActivity.setImage(jpeg);
+        PicturePreviewActivity.setPictureResult(result);
         Intent intent = new Intent(CameraActivity.this, PicturePreviewActivity.class);
         intent.putExtra("delay", callbackTime - mCaptureTime);
-        intent.putExtra("nativeWidth", mCaptureNativeSize.getWidth());
-        intent.putExtra("nativeHeight", mCaptureNativeSize.getHeight());
         startActivity(intent);
-
         mCaptureTime = 0;
-        mCaptureNativeSize = null;
     }
 
-    private void onVideo(File video) {
-        mCapturingVideo = false;
+    private void onVideo(VideoResult video) {
+        VideoPreviewActivity.setVideoResult(video);
         Intent intent = new Intent(CameraActivity.this, VideoPreviewActivity.class);
-        intent.putExtra("video", Uri.fromFile(video));
         startActivity(intent);
     }
 
@@ -125,8 +118,10 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.edit: edit(); break;
-            case R.id.capturePhoto: capturePhoto(); break;
+            case R.id.capturePicture: capturePicture(); break;
+            case R.id.capturePictureSnapshot: capturePictureSnapshot(); break;
             case R.id.captureVideo: captureVideo(); break;
+            case R.id.captureVideoSnapshot: captureVideoSnapshot(); break;
             case R.id.toggleCamera: toggleCamera(); break;
         }
     }
@@ -146,28 +141,45 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         b.setState(BottomSheetBehavior.STATE_COLLAPSED);
     }
 
-    private void capturePhoto() {
-        if (mCapturingPicture) return;
-        mCapturingPicture = true;
+    private void capturePicture() {
+        if (camera.getMode() == Mode.VIDEO) {
+            message("Can't take HQ pictures while in VIDEO mode.", false);
+            return;
+        }
+        if (camera.isTakingPicture()) return;
         mCaptureTime = System.currentTimeMillis();
-        mCaptureNativeSize = camera.getPictureSize();
         message("Capturing picture...", false);
-        camera.capturePicture();
+        camera.takePicture();
+    }
+
+    private void capturePictureSnapshot() {
+        if (camera.isTakingPicture()) return;
+        mCaptureTime = System.currentTimeMillis();
+        message("Capturing picture snapshot...", false);
+        camera.takePictureSnapshot();
     }
 
     private void captureVideo() {
-        if (camera.getSessionType() != SessionType.VIDEO) {
-            message("Can't record video while session type is 'picture'.", false);
+        if (camera.getMode() == Mode.PICTURE) {
+            message("Can't record HQ videos while in PICTURE mode.", false);
             return;
         }
-        if (mCapturingPicture || mCapturingVideo) return;
-        mCapturingVideo = true;
-        message("Recording for 8 seconds...", true);
-        camera.startCapturingVideo(null, 8000);
+        if (camera.isTakingPicture() || camera.isTakingVideo()) return;
+        message("Recording for 5 seconds...", true);
+        camera.takeVideo(new File(getFilesDir(), "video.mp4"), 5000);
+    }
+
+    private void captureVideoSnapshot() {
+        if (camera.isTakingVideo()) {
+            message("Already taking video.", false);
+            return;
+        }
+        message("Recording snapshot for 5 seconds...", true);
+        camera.takeVideoSnapshot(new File(getFilesDir(), "video.mp4"), 5000);
     }
 
     private void toggleCamera() {
-        if (mCapturingPicture) return;
+        if (camera.isTakingPicture() || camera.isTakingVideo()) return;
         switch (camera.toggleFacing()) {
             case BACK:
                 message("Switched to back camera!", false);
@@ -196,25 +208,7 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         return true;
     }
 
-    //region Boilerplate
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        camera.start();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        camera.stop();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        camera.destroy();
-    }
+    //region Permissions
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -223,8 +217,8 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         for (int grantResult : grantResults) {
             valid = valid && grantResult == PackageManager.PERMISSION_GRANTED;
         }
-        if (valid && !camera.isStarted()) {
-            camera.start();
+        if (valid && !camera.isOpened()) {
+            camera.open();
         }
     }
 

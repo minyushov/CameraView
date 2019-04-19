@@ -3,9 +3,9 @@ package com.otaliastudios.cameraview;
 
 import android.content.Context;
 import android.location.Location;
-import android.support.annotation.NonNull;
-import android.support.test.filters.MediumTest;
-import android.support.test.runner.AndroidJUnit4;
+import androidx.annotation.NonNull;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.MediumTest;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
 
@@ -13,8 +13,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -41,18 +39,18 @@ public class CameraViewTest extends BaseTest {
                 cameraView = new CameraView(context) {
                     @Override
                     protected CameraController instantiateCameraController(CameraCallbacks callbacks) {
-                        mockController = new MockCameraController(callbacks);
+                        mockController = spy(new MockCameraController(callbacks));
                         return mockController;
                     }
 
                     @Override
                     protected CameraPreview instantiatePreview(Context context, ViewGroup container) {
-                        mockPreview = new MockCameraPreview(context, container);
+                        mockPreview = spy(new MockCameraPreview(context, container));
                         return mockPreview;
                     }
 
                     @Override
-                    protected boolean checkPermissions(SessionType sessionType, Audio audio) {
+                    protected boolean checkPermissions(@NonNull Audio audio) {
                         return hasPermissions;
                     }
                 };
@@ -70,29 +68,51 @@ public class CameraViewTest extends BaseTest {
         hasPermissions = false;
     }
 
+    //region testLifecycle
+
+    @Test
+    public void testOpen() {
+        cameraView.open();
+        verify(mockPreview, times(1)).onResume();
+        // Can't verify controller, depends on permissions.
+        // See to-do at the end.
+    }
+
+    @Test
+    public void testClose() {
+        cameraView.close();
+        verify(mockPreview, times(1)).onPause();
+        verify(mockController, times(1)).stop();
+    }
+
+    @Test
+    public void testDestroy() {
+        cameraView.destroy();
+        verify(mockPreview, times(1)).onDestroy();
+        verify(mockController, times(1)).destroy();
+    }
+
     //region testDefaults
 
     @Test
     public void testNullBeforeStart() {
-        assertFalse(cameraView.isStarted());
+        assertFalse(cameraView.isOpened());
         assertNull(cameraView.getCameraOptions());
-        assertNull(cameraView.getExtraProperties());
-        assertNull(cameraView.getPreviewSize());
-        assertNull(cameraView.getPictureSize());
         assertNull(cameraView.getSnapshotSize());
+        assertNull(cameraView.getPictureSize());
+        assertNull(cameraView.getVideoSize());
     }
 
     @Test
     public void testDefaults() {
         // CameraController
         assertEquals(cameraView.getFlash(), Flash.DEFAULT);
-        assertEquals(cameraView.getFacing(), Facing.DEFAULT);
+        assertEquals(cameraView.getFacing(), Facing.DEFAULT(context()));
         assertEquals(cameraView.getGrid(), Grid.DEFAULT);
         assertEquals(cameraView.getWhiteBalance(), WhiteBalance.DEFAULT);
-        assertEquals(cameraView.getSessionType(), SessionType.DEFAULT);
+        assertEquals(cameraView.getMode(), Mode.DEFAULT);
         assertEquals(cameraView.getHdr(), Hdr.DEFAULT);
         assertEquals(cameraView.getAudio(), Audio.DEFAULT);
-        assertEquals(cameraView.getVideoQuality(), VideoQuality.DEFAULT);
         assertEquals(cameraView.getVideoCodec(), VideoCodec.DEFAULT);
         assertEquals(cameraView.getLocation(), null);
         assertEquals(cameraView.getExposureCorrection(), 0f, 0f);
@@ -102,8 +122,6 @@ public class CameraViewTest extends BaseTest {
 
         // Self managed
         assertEquals(cameraView.getPlaySounds(), CameraView.DEFAULT_PLAY_SOUNDS);
-        assertEquals(cameraView.getCropOutput(), CameraView.DEFAULT_CROP_OUTPUT);
-        assertEquals(cameraView.getJpegQuality(), CameraView.DEFAULT_JPEG_QUALITY);
         assertEquals(cameraView.getGestureAction(Gesture.TAP), GestureAction.DEFAULT_TAP);
         assertEquals(cameraView.getGestureAction(Gesture.LONG_TAP), GestureAction.DEFAULT_LONG_TAP);
         assertEquals(cameraView.getGestureAction(Gesture.PINCH), GestureAction.DEFAULT_PINCH);
@@ -270,14 +288,14 @@ public class CameraViewTest extends BaseTest {
 
     //region testMeasure
 
-    private void mockPreviewSize() {
+    private void mockPreviewStreamSize() {
         Size size = new Size(900, 1600);
-        mockController.setMockPreviewSize(size);
+        mockController.setMockPreviewStreamSize(size);
     }
 
     @Test
     public void testMeasure_early() {
-        mockController.setMockPreviewSize(null);
+        mockController.setMockPreviewStreamSize(null);
         cameraView.measure(
                 makeMeasureSpec(500, EXACTLY),
                 makeMeasureSpec(500, EXACTLY));
@@ -287,7 +305,7 @@ public class CameraViewTest extends BaseTest {
 
     @Test
     public void testMeasure_matchParentBoth() {
-        mockPreviewSize();
+        mockPreviewStreamSize();
 
         // Respect parent/layout constraints on both dimensions.
         cameraView.setLayoutParams(new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT));
@@ -313,7 +331,7 @@ public class CameraViewTest extends BaseTest {
 
     @Test
     public void testMeasure_wrapContentBoth() {
-        mockPreviewSize();
+        mockPreviewStreamSize();
 
         // Respect parent constraints, but fit aspect ratio.
         // Fit into a 160x160 parent so we espect final width to be 90.
@@ -327,7 +345,7 @@ public class CameraViewTest extends BaseTest {
 
     @Test
     public void testMeasure_wrapContentSingle() {
-        mockPreviewSize();
+        mockPreviewStreamSize();
 
         // Respect MATCH_PARENT on height, change width to fit the aspect ratio.
         cameraView.setLayoutParams(new ViewGroup.LayoutParams(WRAP_CONTENT, MATCH_PARENT));
@@ -348,7 +366,7 @@ public class CameraViewTest extends BaseTest {
 
     @Test
     public void testMeasure_scrollableContainer() {
-        mockPreviewSize();
+        mockPreviewStreamSize();
 
         // Assume a vertical scroll view. It will pass UNSPECIFIED as height.
         // We respect MATCH_PARENT on width (160), and enlarge height to match the aspect ratio.
@@ -460,32 +478,11 @@ public class CameraViewTest extends BaseTest {
     //region test setParameters
 
     @Test
-    public void testSetCropOutput() {
-        cameraView.setCropOutput(true);
-        assertTrue(cameraView.getCropOutput());
-        cameraView.setCropOutput(false);
-        assertFalse(cameraView.getCropOutput());
-    }
-
-    @Test
-    public void testSetJpegQuality() {
-        cameraView.setJpegQuality(10);
-        assertEquals(cameraView.getJpegQuality(), 10);
-        cameraView.setJpegQuality(100);
-        assertEquals(cameraView.getJpegQuality(), 100);
-    }
-
-    @Test
     public void testSetPlaySounds() {
         cameraView.setPlaySounds(true);
         assertEquals(cameraView.getPlaySounds(), true);
         cameraView.setPlaySounds(false);
         assertEquals(cameraView.getPlaySounds(), false);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testSetJpegQuality_illegal() {
-        cameraView.setJpegQuality(-10);
     }
 
     @Test
@@ -530,11 +527,11 @@ public class CameraViewTest extends BaseTest {
     }
 
     @Test
-    public void testSessionType() {
-        cameraView.set(SessionType.VIDEO);
-        assertEquals(cameraView.getSessionType(), SessionType.VIDEO);
-        cameraView.set(SessionType.PICTURE);
-        assertEquals(cameraView.getSessionType(), SessionType.PICTURE);
+    public void testMode() {
+        cameraView.set(Mode.VIDEO);
+        assertEquals(cameraView.getMode(), Mode.VIDEO);
+        cameraView.set(Mode.PICTURE);
+        assertEquals(cameraView.getMode(), Mode.PICTURE);
     }
 
     @Test
@@ -554,14 +551,6 @@ public class CameraViewTest extends BaseTest {
     }
 
     @Test
-    public void testVideoQuality() {
-        cameraView.set(VideoQuality.MAX_1080P);
-        assertEquals(cameraView.getVideoQuality(), VideoQuality.MAX_1080P);
-        cameraView.set(VideoQuality.LOWEST);
-        assertEquals(cameraView.getVideoQuality(), VideoQuality.LOWEST);
-    }
-
-    @Test
     public void testVideoCodec() {
         cameraView.set(VideoCodec.H_263);
         assertEquals(cameraView.getVideoCodec(), VideoCodec.H_263);
@@ -570,10 +559,28 @@ public class CameraViewTest extends BaseTest {
     }
 
     @Test
+    public void testPreviewStreamSizeSelector() {
+        SizeSelector source = SizeSelectors.minHeight(50);
+        cameraView.setPreviewStreamSize(source);
+        SizeSelector result = mockController.getPreviewStreamSizeSelector();
+        assertNotNull(result);
+        assertEquals(result, source);
+    }
+
+    @Test
     public void testPictureSizeSelector() {
         SizeSelector source = SizeSelectors.minHeight(50);
         cameraView.setPictureSize(source);
         SizeSelector result = mockController.getPictureSizeSelector();
+        assertNotNull(result);
+        assertEquals(result, source);
+    }
+
+    @Test
+    public void testVideoSizeSelector() {
+        SizeSelector source = SizeSelectors.minHeight(50);
+        cameraView.setVideoSize(source);
+        SizeSelector result = mockController.getVideoSizeSelector();
         assertNotNull(result);
         assertEquals(result, source);
     }
@@ -644,12 +651,24 @@ public class CameraViewTest extends BaseTest {
         assertTrue(cameraView.mFrameProcessors.isEmpty());
 
         // Ensure this does not throw a ConcurrentModificationException
-        cameraView.addFrameProcessor(new FrameProcessor() { public void process(Frame f) {} });
-        cameraView.addFrameProcessor(new FrameProcessor() { public void process(Frame f) {} });
-        cameraView.addFrameProcessor(new FrameProcessor() { public void process(Frame f) {} });
+        cameraView.addFrameProcessor(new FrameProcessor() { public void process(@NonNull Frame f) {} });
+        cameraView.addFrameProcessor(new FrameProcessor() { public void process(@NonNull Frame f) {} });
+        cameraView.addFrameProcessor(new FrameProcessor() { public void process(@NonNull Frame f) {} });
         for (FrameProcessor test : cameraView.mFrameProcessors) {
             cameraView.mFrameProcessors.remove(test);
         }
+    }
+
+    //endregion
+
+    //region Snapshots
+
+    @Test
+    public void testSetSnapshotMaxSize() {
+        cameraView.setSnapshotMaxWidth(500);
+        cameraView.setSnapshotMaxHeight(1000);
+        assertEquals(mockController.mSnapshotMaxWidth, 500);
+        assertEquals(mockController.mSnapshotMaxHeight, 1000);
     }
 
     //endregion

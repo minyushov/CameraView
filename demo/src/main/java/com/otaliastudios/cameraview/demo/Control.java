@@ -1,5 +1,7 @@
 package com.otaliastudios.cameraview.demo;
 
+import android.graphics.Color;
+import androidx.annotation.NonNull;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -11,12 +13,11 @@ import com.otaliastudios.cameraview.Gesture;
 import com.otaliastudios.cameraview.GestureAction;
 import com.otaliastudios.cameraview.Grid;
 import com.otaliastudios.cameraview.Hdr;
-import com.otaliastudios.cameraview.SessionType;
-import com.otaliastudios.cameraview.VideoQuality;
+import com.otaliastudios.cameraview.Mode;
+import com.otaliastudios.cameraview.VideoCodec;
 import com.otaliastudios.cameraview.WhiteBalance;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
@@ -27,19 +28,26 @@ public enum Control {
 
     WIDTH("Width", false),
     HEIGHT("Height", true),
-    SESSION("Session type", false),
-    CROP_OUTPUT("Crop output", true),
+
+    MODE("Mode", false),
     FLASH("Flash", false),
     WHITE_BALANCE("White balance", false),
-    GRID("Grid", true),
-    VIDEO_QUALITY("Video quality", false),
-    HDR("Hdr", false),
+    HDR("Hdr", true),
+
+    GRID("Grid lines", false),
+    GRID_COLOR("Grid color", true),
+
+    // TODO audio bitRate
+    // TODO video bitRate
+    // THey are a bit annoying because it's not clear what the default should be.
+    VIDEO_CODEC("Video codec", false),
     AUDIO("Audio", true),
-    PINCH("Pinch gesture", false),
-    HSCROLL("Horizontal scroll gesture", false),
-    VSCROLL("Vertical scroll gesture", false),
-    TAP("Single tap gesture", false),
-    LONG_TAP("Long tap gesture", true);
+
+    PINCH("Pinch", false),
+    HSCROLL("Horizontal scroll", false),
+    VSCROLL("Vertical scroll", false),
+    TAP("Single tap", false),
+    LONG_TAP("Long tap", true);
 
     private String name;
     private boolean last;
@@ -57,8 +65,7 @@ public enum Control {
         return last;
     }
 
-    public Collection<?> getValues(CameraView view) {
-        CameraOptions options = view.getCameraOptions();
+    public Collection<?> getValues(CameraView view, @NonNull CameraOptions options) {
         switch (this) {
             case WIDTH:
             case HEIGHT:
@@ -67,20 +74,20 @@ public enum Control {
                 int boundary = this == WIDTH ? root.getWidth() : root.getHeight();
                 if (boundary == 0) boundary = 1000;
                 int step = boundary / 10;
+                // list.add(this == WIDTH ? 300 : 700);
                 list.add(ViewGroup.LayoutParams.WRAP_CONTENT);
                 list.add(ViewGroup.LayoutParams.MATCH_PARENT);
                 for (int i = step; i < boundary; i += step) {
                     list.add(i);
                 }
                 return list;
-            case CROP_OUTPUT: return Arrays.asList(true, false);
-            case SESSION: return options.getSupportedControls(SessionType.class);
+            case MODE: return options.getSupportedControls(Mode.class);
             case FLASH: return options.getSupportedControls(Flash.class);
             case WHITE_BALANCE: return options.getSupportedControls(WhiteBalance.class);
             case HDR: return options.getSupportedControls(Hdr.class);
             case GRID: return options.getSupportedControls(Grid.class);
-            case VIDEO_QUALITY: return options.getSupportedControls(VideoQuality.class);
             case AUDIO: return options.getSupportedControls(Audio.class);
+            case VIDEO_CODEC: return options.getSupportedControls(VideoCodec.class);
             case PINCH:
             case HSCROLL:
             case VSCROLL:
@@ -97,7 +104,13 @@ public enum Control {
                 addIfSupported(options, list2, GestureAction.FOCUS);
                 addIfSupported(options, list2, GestureAction.FOCUS_WITH_MARKER);
                 return list2;
-
+            case GRID_COLOR:
+                ArrayList<GridColor> list3 = new ArrayList<>();
+                list3.add(new GridColor(Color.argb(160, 255, 255, 255), "default"));
+                list3.add(new GridColor(Color.WHITE, "white"));
+                list3.add(new GridColor(Color.BLACK, "black"));
+                list3.add(new GridColor(Color.YELLOW, "yellow"));
+                return list3;
         }
         return null;
     }
@@ -110,13 +123,13 @@ public enum Control {
         switch (this) {
             case WIDTH: return view.getLayoutParams().width;
             case HEIGHT: return view.getLayoutParams().height;
-            case SESSION: return view.getSessionType();
-            case CROP_OUTPUT: return view.getCropOutput();
+            case MODE: return view.getMode();
             case FLASH: return view.getFlash();
             case WHITE_BALANCE: return view.getWhiteBalance();
             case GRID: return view.getGrid();
-            case VIDEO_QUALITY: return view.getVideoQuality();
+            case GRID_COLOR: return new GridColor(view.getGridColor(), "color");
             case AUDIO: return view.getAudio();
+            case VIDEO_CODEC: return view.getVideoCodec();
             case HDR: return view.getHdr();
             case PINCH: return view.getGestureAction(Gesture.PINCH);
             case HSCROLL: return view.getGestureAction(Gesture.SCROLL_HORIZONTAL);
@@ -137,17 +150,14 @@ public enum Control {
                 camera.getLayoutParams().height = (int) value;
                 camera.setLayoutParams(camera.getLayoutParams());
                 break;
-            case SESSION:
+            case MODE:
             case FLASH:
             case WHITE_BALANCE:
             case GRID:
-            case VIDEO_QUALITY:
             case AUDIO:
+            case VIDEO_CODEC:
             case HDR:
                 camera.set((com.otaliastudios.cameraview.Control) value);
-                break;
-            case CROP_OUTPUT:
-                camera.setCropOutput((boolean) value);
                 break;
             case PINCH:
                 camera.mapGesture(Gesture.PINCH, (GestureAction) value);
@@ -164,8 +174,29 @@ public enum Control {
             case LONG_TAP:
                 camera.mapGesture(Gesture.LONG_TAP, (GestureAction) value);
                 break;
+            case GRID_COLOR:
+                camera.setGridColor(((GridColor) value).color);
         }
     }
 
 
+    static class GridColor {
+        int color;
+        String name;
+
+        GridColor(int color, String name) {
+            this.color = color;
+            this.name = name;
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof GridColor && color == ((GridColor) obj).color;
+        }
+    }
 }

@@ -2,7 +2,7 @@ package com.otaliastudios.cameraview;
 
 import android.content.Context;
 import android.hardware.SensorManager;
-import android.support.annotation.NonNull;
+import androidx.annotation.NonNull;
 import android.view.Display;
 import android.view.OrientationEventListener;
 import android.view.Surface;
@@ -20,15 +20,16 @@ class OrientationHelper {
         void onDeviceOrientationChanged(int deviceOrientation);
     }
 
-    OrientationHelper(Context context, @NonNull Callback callback) {
+    OrientationHelper(@NonNull Context context, @NonNull Callback callback) {
         mCallback = callback;
         mListener = new OrientationEventListener(context.getApplicationContext(), SensorManager.SENSOR_DELAY_NORMAL) {
 
+            @SuppressWarnings("ConstantConditions")
             @Override
             public void onOrientationChanged(int orientation) {
                 int or = 0;
                 if (orientation == OrientationEventListener.ORIENTATION_UNKNOWN) {
-                    or = 0;
+                    or = mDeviceOrientation != -1 ? mDeviceOrientation : 0;
                 } else if (orientation >= 315 || orientation < 45) {
                     or = 0;
                 } else if (orientation >= 45 && orientation < 135) {
@@ -47,7 +48,7 @@ class OrientationHelper {
         };
     }
 
-    void enable(Context context) {
+    void enable(@NonNull Context context) {
         Display display = ((WindowManager) context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
         switch (display.getRotation()) {
             case Surface.ROTATION_0: mDisplayOffset = 0; break;

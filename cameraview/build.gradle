@@ -7,32 +7,37 @@ android {
     defaultConfig {
         minSdkVersion androidMinSdkVersion
         targetSdkVersion androidTargetSdkVersion
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     sourceSets {
         main.java.srcDirs += 'src/main/options'
         main.java.srcDirs += 'src/main/views'
         main.java.srcDirs += 'src/main/utils'
+        main.java.srcDirs += 'src/main/gles'
     }
 
     libraryVariants.all {
-        it.generateBuildConfig.enabled = false
+        it.generateBuildConfigProvider.configure {
+          it.enabled = false
+        }
     }
 }
 
 dependencies {
     testImplementation 'junit:junit:4.12'
-    testImplementation 'org.mockito:mockito-core:2.21.0'
+    testImplementation 'org.mockito:mockito-core:2.23.0'
 
-    androidTestImplementation 'com.android.support.test:runner:1.0.2'
-    androidTestImplementation 'com.android.support.test:rules:1.0.2'
+    androidTestImplementation 'androidx.test:runner:1.1.1'
+    androidTestImplementation 'androidx.test:rules:1.1.1'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.0'
     androidTestImplementation 'com.google.dexmaker:dexmaker:1.2'
     androidTestImplementation 'com.google.dexmaker:dexmaker-mockito:1.2'
-    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.1'
 
-    api "com.android.support:exifinterface:$androidSupportLibraryVersion"
-    implementation "com.android.support:support-annotations:$androidSupportLibraryVersion"
+    api 'androidx.exifinterface:exifinterface:1.0.0'
+    api 'androidx.lifecycle:lifecycle-common:2.1.0-alpha01'
+    implementation 'androidx.annotation:annotation:1.0.1'
 }
 
 bintrayUpload {
@@ -40,7 +45,7 @@ bintrayUpload {
     repo = "android"
     groupId = "com.minyushov.android"
     artifactId = "cameraview"
-    version = "1.5.2"
+    version = "2.0.0-beta04"
     vcsUrl = "https://github.com/minyushov/CameraView.git"
     license = "MIT"
     docsSettings {

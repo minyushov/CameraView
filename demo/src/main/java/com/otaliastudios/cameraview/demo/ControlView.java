@@ -57,8 +57,8 @@ public class ControlView<Value> extends LinearLayout implements Spinner.OnItemSe
     }
 
     @SuppressWarnings("all")
-    public void onCameraOpened(CameraView view) {
-        values = new ArrayList(control.getValues(view));
+    public void onCameraOpened(CameraView view, CameraOptions options) {
+        values = new ArrayList(control.getValues(view, options));
         value = (Value) control.getCurrentValue(view);
         valuesStrings = new ArrayList<>();
         for (Value value : values) {
@@ -84,7 +84,7 @@ public class ControlView<Value> extends LinearLayout implements Spinner.OnItemSe
 
     @Override
     public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-        if (values.get(i) != value) {
+        if (!values.get(i).equals(value)) {
             Log.e("ControlView", "curr: " + value + " new: " + values.get(i));
             if (!callback.onValueChanged(control, values.get(i), valuesStrings.get(i))) {
                 spinner.setSelection(values.indexOf(value)); // Go back.
