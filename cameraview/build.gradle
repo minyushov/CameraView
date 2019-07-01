@@ -49,11 +49,6 @@ bintrayUpload {
     vcsUrl = "https://github.com/minyushov/CameraView.git"
     license = "MIT"
     docsSettings {
-        project.android.libraryVariants.all { variant ->
-            if (variant.name == 'release') {
-                classpath += files(variant.javaCompileProvider.get().classpath)
-            }
-        }
         options {
             docTitle "CameraView ${bintrayUpload.version.get()}"
             windowTitle docTitle
