@@ -72,6 +72,7 @@ abstract class CameraController implements
     protected Size mCaptureSize;
     protected Size mPreviewStreamSize;
     protected int mPreviewFormat;
+    protected long mAutoFocusResetDelayMillis;
 
     protected int mSensorOffset;
     private int mDisplayOffset;
@@ -339,6 +340,8 @@ abstract class CameraController implements
         mSnapshotMaxHeight = maxHeight;
     }
 
+    final void setAutoFocusResetDelay(long delayMillis) { mAutoFocusResetDelayMillis = delayMillis; }
+
     //endregion
 
     //region Abstract setters and APIs
@@ -477,6 +480,12 @@ abstract class CameraController implements
 
     final boolean isTakingPicture() {
         return mPictureRecorder != null;
+    }
+
+    final long getAutoFocusResetDelay() { return mAutoFocusResetDelayMillis; }
+
+    final boolean shouldResetAutoFocus() {
+        return mAutoFocusResetDelayMillis > 0 && mAutoFocusResetDelayMillis != Long.MAX_VALUE;
     }
 
     //endregion

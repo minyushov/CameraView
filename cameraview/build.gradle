@@ -45,7 +45,7 @@ bintrayUpload {
     repo = "android"
     groupId = "com.minyushov.android"
     artifactId = "cameraview"
-    version = "2.0.0-beta04"
+    version = "2.0.0-beta05"
     vcsUrl = "https://github.com/minyushov/CameraView.git"
     license = "MIT"
     docsSettings {
