@@ -30,13 +30,17 @@ camera.addCameraListener(new CameraListener() {
     
     public void onOrientationChanged(int orientation) {}
 
-    public void onFocusStart(PointF point) {}
+    public void onAutoFocusStart(PointF point) {}
     
-    public void onFocusEnd(boolean successful, PointF point) {}
+    public void onAutoFocusEnd(boolean successful, PointF point) {}
     
     public void onZoomChanged(float newValue, float[] bounds, PointF[] fingers) {}
     
     public void onExposureCorrectionChanged(float newValue, float[] bounds, PointF[] fingers) {}
+
+    public void onVideoRecordingStart() {}
+    
+    public void onVideoRecordingEnd() {}
 });
 ```
 

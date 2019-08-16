@@ -2,12 +2,54 @@ package com.otaliastudios.cameraview;
 
 
 import android.content.Context;
+import android.content.res.TypedArray;
+import android.graphics.PointF;
 import android.location.Location;
 import androidx.annotation.NonNull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.MediumTest;
+
+import android.util.AttributeSet;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewGroup;
+
+import com.otaliastudios.cameraview.controls.Audio;
+import com.otaliastudios.cameraview.controls.ControlParser;
+import com.otaliastudios.cameraview.controls.Engine;
+import com.otaliastudios.cameraview.controls.Facing;
+import com.otaliastudios.cameraview.controls.Flash;
+import com.otaliastudios.cameraview.controls.Preview;
+import com.otaliastudios.cameraview.engine.CameraEngine;
+import com.otaliastudios.cameraview.filter.Filter;
+import com.otaliastudios.cameraview.filter.Filters;
+import com.otaliastudios.cameraview.filter.NoFilter;
+import com.otaliastudios.cameraview.filters.DuotoneFilter;
+import com.otaliastudios.cameraview.frame.Frame;
+import com.otaliastudios.cameraview.frame.FrameProcessor;
+import com.otaliastudios.cameraview.gesture.Gesture;
+import com.otaliastudios.cameraview.gesture.GestureAction;
+import com.otaliastudios.cameraview.controls.Grid;
+import com.otaliastudios.cameraview.controls.Hdr;
+import com.otaliastudios.cameraview.controls.Mode;
+import com.otaliastudios.cameraview.controls.VideoCodec;
+import com.otaliastudios.cameraview.controls.WhiteBalance;
+import com.otaliastudios.cameraview.gesture.GestureParser;
+import com.otaliastudios.cameraview.gesture.PinchGestureFinder;
+import com.otaliastudios.cameraview.gesture.ScrollGestureFinder;
+import com.otaliastudios.cameraview.gesture.TapGestureFinder;
+import com.otaliastudios.cameraview.engine.MockCameraEngine;
+import com.otaliastudios.cameraview.internal.utils.Op;
+import com.otaliastudios.cameraview.markers.AutoFocusMarker;
+import com.otaliastudios.cameraview.markers.DefaultAutoFocusMarker;
+import com.otaliastudios.cameraview.markers.MarkerLayout;
+import com.otaliastudios.cameraview.overlay.OverlayLayout;
+import com.otaliastudios.cameraview.preview.MockCameraPreview;
+import com.otaliastudios.cameraview.preview.CameraPreview;
+import com.otaliastudios.cameraview.size.Size;
+import com.otaliastudios.cameraview.size.SizeSelector;
+import com.otaliastudios.cameraview.size.SizeSelectors;
 
 import org.junit.After;
 import org.junit.Before;
@@ -26,25 +68,28 @@ import static android.view.ViewGroup.LayoutParams.*;
 public class CameraViewTest extends BaseTest {
 
     private CameraView cameraView;
-    private MockCameraController mockController;
-    private CameraPreview mockPreview;
+    private MockCameraEngine mockController;
+    private MockCameraPreview mockPreview;
     private boolean hasPermissions;
 
     @Before
     public void setUp() {
-        ui(new Runnable() {
+        uiSync(new Runnable() {
             @Override
             public void run() {
-                Context context = context();
+                Context context = getContext();
                 cameraView = new CameraView(context) {
+
+                    @NonNull
                     @Override
-                    protected CameraController instantiateCameraController(CameraCallbacks callbacks) {
-                        mockController = spy(new MockCameraController(callbacks));
+                    protected CameraEngine instantiateCameraEngine(@NonNull Engine engine, @NonNull CameraEngine.Callback callback) {
+                        mockController = spy(new MockCameraEngine(callback));
                         return mockController;
                     }
 
+                    @NonNull
                     @Override
-                    protected CameraPreview instantiatePreview(Context context, ViewGroup container) {
+                    protected CameraPreview instantiatePreview(@NonNull Preview preview, @NonNull Context context, @NonNull ViewGroup container) {
                         mockPreview = spy(new MockCameraPreview(context, container));
                         return mockPreview;
                     }
@@ -55,7 +100,7 @@ public class CameraViewTest extends BaseTest {
                     }
                 };
                 // Instantiate preview now.
-                cameraView.instantiatePreview();
+                cameraView.doInstantiatePreview();
             }
         });
     }
@@ -105,15 +150,18 @@ public class CameraViewTest extends BaseTest {
 
     @Test
     public void testDefaults() {
-        // CameraController
-        assertEquals(cameraView.getFlash(), Flash.DEFAULT);
-        assertEquals(cameraView.getFacing(), Facing.DEFAULT(context()));
-        assertEquals(cameraView.getGrid(), Grid.DEFAULT);
-        assertEquals(cameraView.getWhiteBalance(), WhiteBalance.DEFAULT);
-        assertEquals(cameraView.getMode(), Mode.DEFAULT);
-        assertEquals(cameraView.getHdr(), Hdr.DEFAULT);
-        assertEquals(cameraView.getAudio(), Audio.DEFAULT);
-        assertEquals(cameraView.getVideoCodec(), VideoCodec.DEFAULT);
+        // CameraEngine
+        TypedArray empty = getContext().obtainStyledAttributes(new int[]{});
+        ControlParser controls = new ControlParser(getContext(), empty);
+        assertEquals(cameraView.getFlash(), controls.getFlash());
+        assertEquals(cameraView.getFacing(), controls.getFacing());
+        assertEquals(cameraView.getGrid(), controls.getGrid());
+        assertEquals(cameraView.getWhiteBalance(), controls.getWhiteBalance());
+        assertEquals(cameraView.getMode(), controls.getMode());
+        assertEquals(cameraView.getHdr(), controls.getHdr());
+        assertEquals(cameraView.getAudio(), controls.getAudio());
+        assertEquals(cameraView.getVideoCodec(), controls.getVideoCodec());
+        //noinspection SimplifiableJUnitAssertion
         assertEquals(cameraView.getLocation(), null);
         assertEquals(cameraView.getExposureCorrection(), 0f, 0f);
         assertEquals(cameraView.getZoom(), 0f, 0f);
@@ -121,12 +169,14 @@ public class CameraViewTest extends BaseTest {
         assertEquals(cameraView.getVideoMaxSize(), 0, 0);
 
         // Self managed
+        GestureParser gestures = new GestureParser(empty);
         assertEquals(cameraView.getPlaySounds(), CameraView.DEFAULT_PLAY_SOUNDS);
-        assertEquals(cameraView.getGestureAction(Gesture.TAP), GestureAction.DEFAULT_TAP);
-        assertEquals(cameraView.getGestureAction(Gesture.LONG_TAP), GestureAction.DEFAULT_LONG_TAP);
-        assertEquals(cameraView.getGestureAction(Gesture.PINCH), GestureAction.DEFAULT_PINCH);
-        assertEquals(cameraView.getGestureAction(Gesture.SCROLL_HORIZONTAL), GestureAction.DEFAULT_SCROLL_HORIZONTAL);
-        assertEquals(cameraView.getGestureAction(Gesture.SCROLL_VERTICAL), GestureAction.DEFAULT_SCROLL_VERTICAL);
+        assertEquals(cameraView.getUseDeviceOrientation(), CameraView.DEFAULT_USE_DEVICE_ORIENTATION);
+        assertEquals(cameraView.getGestureAction(Gesture.TAP), gestures.getTapAction());
+        assertEquals(cameraView.getGestureAction(Gesture.LONG_TAP), gestures.getLongTapAction());
+        assertEquals(cameraView.getGestureAction(Gesture.PINCH), gestures.getPinchAction());
+        assertEquals(cameraView.getGestureAction(Gesture.SCROLL_HORIZONTAL), gestures.getHorizontalScrollAction());
+        assertEquals(cameraView.getGestureAction(Gesture.SCROLL_VERTICAL), gestures.getVerticalScrollAction());
     }
 
     //endregion
@@ -140,7 +190,7 @@ public class CameraViewTest extends BaseTest {
         assertEquals(cameraView.getGestureAction(Gesture.PINCH), GestureAction.ZOOM);
 
         // Not assignable: This is like clearing
-        cameraView.mapGesture(Gesture.PINCH, GestureAction.CAPTURE);
+        cameraView.mapGesture(Gesture.PINCH, GestureAction.TAKE_PICTURE);
         assertEquals(cameraView.getGestureAction(Gesture.PINCH), GestureAction.NONE);
 
         // Test clearing
@@ -159,21 +209,21 @@ public class CameraViewTest extends BaseTest {
 
         // PinchGestureLayout
         cameraView.mapGesture(Gesture.PINCH, GestureAction.ZOOM);
-        assertTrue(cameraView.mPinchGestureLayout.enabled());
+        assertTrue(cameraView.mPinchGestureFinder.isActive());
         cameraView.clearGesture(Gesture.PINCH);
-        assertFalse(cameraView.mPinchGestureLayout.enabled());
+        assertFalse(cameraView.mPinchGestureFinder.isActive());
 
         // TapGestureLayout
-        cameraView.mapGesture(Gesture.TAP, GestureAction.CAPTURE);
-        assertTrue(cameraView.mTapGestureLayout.enabled());
+        cameraView.mapGesture(Gesture.TAP, GestureAction.TAKE_PICTURE);
+        assertTrue(cameraView.mTapGestureFinder.isActive());
         cameraView.clearGesture(Gesture.TAP);
-        assertFalse(cameraView.mPinchGestureLayout.enabled());
+        assertFalse(cameraView.mPinchGestureFinder.isActive());
 
         // ScrollGestureLayout
         cameraView.mapGesture(Gesture.SCROLL_HORIZONTAL, GestureAction.ZOOM);
-        assertTrue(cameraView.mScrollGestureLayout.enabled());
+        assertTrue(cameraView.mScrollGestureFinder.isActive());
         cameraView.clearGesture(Gesture.SCROLL_HORIZONTAL);
-        assertFalse(cameraView.mScrollGestureLayout.enabled());
+        assertFalse(cameraView.mScrollGestureFinder.isActive());
     }
 
     //endregion
@@ -182,106 +232,212 @@ public class CameraViewTest extends BaseTest {
 
     @Test
     public void testGestureAction_capture() {
-        mockController.mockStarted(true);
+        CameraOptions o = mock(CameraOptions.class);
+        mockController.setMockCameraOptions(o);
+        mockController.setMockEngineState(true);
         MotionEvent event = MotionEvent.obtain(0L, 0L, 0, 0f, 0f, 0);
-        ui(new Runnable() {
+        uiSync(new Runnable() {
             @Override
             public void run() {
-                cameraView.mTapGestureLayout = new TapGestureLayout(cameraView.getContext()) {
-                    public boolean onTouchEvent(MotionEvent event) { return true; }
-
+                cameraView.mTapGestureFinder = new TapGestureFinder(cameraView.mCameraCallbacks) {
+                    protected boolean handleTouchEvent(@NonNull MotionEvent event) {
+                        setGesture(Gesture.TAP);
+                        return true;
+                    }
                 };
-                cameraView.mTapGestureLayout.setGestureType(Gesture.TAP);
             }
         });
-        cameraView.mapGesture(Gesture.TAP, GestureAction.CAPTURE);
+        cameraView.mapGesture(Gesture.TAP, GestureAction.TAKE_PICTURE);
         cameraView.dispatchTouchEvent(event);
         assertTrue(mockController.mPictureCaptured);
     }
 
     @Test
     public void testGestureAction_focus() {
-        mockController.mockStarted(true);
+        CameraOptions o = mock(CameraOptions.class);
+        mockController.setMockCameraOptions(o);
+        mockController.setMockEngineState(true);
         MotionEvent event = MotionEvent.obtain(0L, 0L, 0, 0f, 0f, 0);
-        ui(new Runnable() {
+        uiSync(new Runnable() {
             @Override
             public void run() {
-                cameraView.mTapGestureLayout = new TapGestureLayout(cameraView.getContext()) {
-                    public boolean onTouchEvent(MotionEvent event) { return true; }
+                cameraView.mTapGestureFinder = new TapGestureFinder(cameraView.mCameraCallbacks) {
+                    protected boolean handleTouchEvent(@NonNull MotionEvent event) {
+                        setGesture(Gesture.TAP);
+                        return true;
+                    }
                 };
-                cameraView.mTapGestureLayout.setGestureType(Gesture.TAP);
             }
         });
         mockController.mFocusStarted = false;
-        cameraView.mapGesture(Gesture.TAP, GestureAction.FOCUS);
-        cameraView.dispatchTouchEvent(event);
-        assertTrue(mockController.mFocusStarted);
-
-        // Try with FOCUS_WITH_MARKER
-        mockController.mFocusStarted = false;
-        cameraView.mapGesture(Gesture.TAP, GestureAction.FOCUS_WITH_MARKER);
+        cameraView.mapGesture(Gesture.TAP, GestureAction.AUTO_FOCUS);
         cameraView.dispatchTouchEvent(event);
         assertTrue(mockController.mFocusStarted);
     }
 
+    private class FactorHolder { float value; }
+
     @Test
     public void testGestureAction_zoom() {
-        mockController.mockStarted(true);
+        CameraOptions o = mock(CameraOptions.class);
+        mockController.setMockCameraOptions(o);
+        mockController.setMockEngineState(true);
         mockController.mZoomChanged = false;
         MotionEvent event = MotionEvent.obtain(0L, 0L, 0, 0f, 0f, 0);
-        ui(new Runnable() {
+        final FactorHolder factor = new FactorHolder();
+        uiSync(new Runnable() {
             @Override
             public void run() {
-                cameraView.mPinchGestureLayout = new PinchGestureLayout(cameraView.getContext()) {
-                    public boolean onTouchEvent(MotionEvent event) { return true; }
+                cameraView.mPinchGestureFinder = new PinchGestureFinder(cameraView.mCameraCallbacks) {
+                    @Override
+                    protected boolean handleTouchEvent(@NonNull MotionEvent event) {
+                        setGesture(Gesture.PINCH);
+                        return true;
+                    }
+
+                    @Override
+                    protected float getFactor() {
+                        return factor.value;
+                    }
                 };
-                cameraView.mPinchGestureLayout.setGestureType(Gesture.PINCH);
                 cameraView.mapGesture(Gesture.PINCH, GestureAction.ZOOM);
 
             }
         });
 
         // If factor is 0, we return the same value. The controller should not be notified.
-        cameraView.mPinchGestureLayout.mFactor = 0f;
+        factor.value = 0f;
         cameraView.dispatchTouchEvent(event);
         assertFalse(mockController.mZoomChanged);
 
         // For larger factors, the value is scaled. The controller should be notified.
-        cameraView.mPinchGestureLayout.mFactor = 1f;
+        factor.value = 1f;
         cameraView.dispatchTouchEvent(event);
         assertTrue(mockController.mZoomChanged);
     }
 
     @Test
     public void testGestureAction_exposureCorrection() {
-        // This needs a valid CameraOptions value.
         CameraOptions o = mock(CameraOptions.class);
         when(o.getExposureCorrectionMinValue()).thenReturn(-10f);
         when(o.getExposureCorrectionMaxValue()).thenReturn(10f);
         mockController.setMockCameraOptions(o);
-        mockController.mockStarted(true);
+        mockController.setMockEngineState(true);
         mockController.mExposureCorrectionChanged = false;
         MotionEvent event = MotionEvent.obtain(0L, 0L, 0, 0f, 0f, 0);
-        ui(new Runnable() {
+        final FactorHolder factor = new FactorHolder();
+        uiSync(new Runnable() {
             @Override
             public void run() {
-                cameraView.mScrollGestureLayout = new ScrollGestureLayout(cameraView.getContext()) {
-                    public boolean onTouchEvent(MotionEvent event) { return true; }
+                cameraView.mScrollGestureFinder = new ScrollGestureFinder(cameraView.mCameraCallbacks) {
+                    @Override
+                    protected boolean handleTouchEvent(@NonNull MotionEvent event) {
+                        setGesture(Gesture.SCROLL_HORIZONTAL);
+                        return true;
+                    }
+
+                    @Override
+                    protected float getFactor() {
+                        return factor.value;
+                    }
                 };
-                cameraView.mScrollGestureLayout.setGestureType(Gesture.SCROLL_HORIZONTAL);
                 cameraView.mapGesture(Gesture.SCROLL_HORIZONTAL, GestureAction.EXPOSURE_CORRECTION);
             }
         });
 
         // If factor is 0, we return the same value. The controller should not be notified.
-        cameraView.mScrollGestureLayout.mFactor = 0f;
+        factor.value = 0f;
         cameraView.dispatchTouchEvent(event);
         assertFalse(mockController.mExposureCorrectionChanged);
 
         // For larger factors, the value is scaled. The controller should be notified.
-        cameraView.mScrollGestureLayout.mFactor = 1f;
+        factor.value = 1f;
         cameraView.dispatchTouchEvent(event);
         assertTrue(mockController.mExposureCorrectionChanged);
+    }
+
+    @Test
+    public void testGestureAction_filterControl1() {
+        mockController.setMockEngineState(true);
+        mockController.setMockCameraOptions(mock(CameraOptions.class));
+        DuotoneFilter filter = new DuotoneFilter(); // supports two parameters
+        filter.setParameter1(0F);
+        filter = spy(filter);
+        cameraView.setExperimental(true);
+        cameraView.setFilter(filter);
+        mockController.mExposureCorrectionChanged = false;
+        MotionEvent event = MotionEvent.obtain(0L, 0L, 0, 0f, 0f, 0);
+        final FactorHolder factor = new FactorHolder();
+        uiSync(new Runnable() {
+            @Override
+            public void run() {
+                cameraView.mScrollGestureFinder = new ScrollGestureFinder(cameraView.mCameraCallbacks) {
+                    @Override
+                    protected boolean handleTouchEvent(@NonNull MotionEvent event) {
+                        setGesture(Gesture.SCROLL_HORIZONTAL);
+                        return true;
+                    }
+
+                    @Override
+                    protected float getFactor() {
+                        return factor.value;
+                    }
+                };
+                cameraView.mapGesture(Gesture.SCROLL_HORIZONTAL, GestureAction.FILTER_CONTROL_1);
+            }
+        });
+
+        // If factor is 0, we return the same value. The filter should not be notified.
+        factor.value = 0f;
+        cameraView.dispatchTouchEvent(event);
+        verify(filter, never()).setParameter1(anyFloat());
+
+        // For larger factors, the value is scaled. The filter should be notified.
+        factor.value = 1f;
+        cameraView.dispatchTouchEvent(event);
+        verify(filter, times(1)).setParameter1(anyFloat());
+    }
+
+    @Test
+    public void testGestureAction_filterControl2() {
+        mockController.setMockEngineState(true);
+        mockController.setMockCameraOptions(mock(CameraOptions.class));
+        DuotoneFilter filter = new DuotoneFilter(); // supports two parameters
+        filter.setParameter2(0F);
+        filter = spy(filter);
+        cameraView.setExperimental(true);
+        cameraView.setFilter(filter);
+        mockController.mExposureCorrectionChanged = false;
+        MotionEvent event = MotionEvent.obtain(0L, 0L, 0, 0f, 0f, 0);
+        final FactorHolder factor = new FactorHolder();
+        uiSync(new Runnable() {
+            @Override
+            public void run() {
+                cameraView.mScrollGestureFinder = new ScrollGestureFinder(cameraView.mCameraCallbacks) {
+                    @Override
+                    protected boolean handleTouchEvent(@NonNull MotionEvent event) {
+                        setGesture(Gesture.SCROLL_HORIZONTAL);
+                        return true;
+                    }
+
+                    @Override
+                    protected float getFactor() {
+                        return factor.value;
+                    }
+                };
+                cameraView.mapGesture(Gesture.SCROLL_HORIZONTAL, GestureAction.FILTER_CONTROL_2);
+            }
+        });
+
+        // If factor is 0, we return the same value. The filter should not be notified.
+        factor.value = 0f;
+        cameraView.dispatchTouchEvent(event);
+        verify(filter, never()).setParameter2(anyFloat());
+
+        // For larger factors, the value is scaled. The filter should be notified.
+        factor.value = 1f;
+        cameraView.dispatchTouchEvent(event);
+        verify(filter, times(1)).setParameter2(anyFloat());
     }
 
     //endregion
@@ -425,11 +581,11 @@ public class CameraViewTest extends BaseTest {
     @Test
     public void testSetLocation() {
         cameraView.setLocation(50d, -50d);
-        assertEquals(50d, mockController.mLocation.getLatitude(), 0);
-        assertEquals(-50d, mockController.mLocation.getLongitude(), 0);
-        assertEquals(0, mockController.mLocation.getAltitude(), 0);
-        assertEquals("Unknown", mockController.mLocation.getProvider());
-        assertEquals(System.currentTimeMillis(), mockController.mLocation.getTime(), 1000f);
+        assertEquals(50d, mockController.getLocation().getLatitude(), 0);
+        assertEquals(-50d, mockController.getLocation().getLongitude(), 0);
+        assertEquals(0, mockController.getLocation().getAltitude(), 0);
+        assertEquals("Unknown", mockController.getLocation().getProvider());
+        assertEquals(System.currentTimeMillis(), mockController.getLocation().getTime(), 1000f);
 
         Location source = new Location("Provider");
         source.setTime(5000);
@@ -480,82 +636,94 @@ public class CameraViewTest extends BaseTest {
     @Test
     public void testSetPlaySounds() {
         cameraView.setPlaySounds(true);
-        assertEquals(cameraView.getPlaySounds(), true);
+        assertTrue(cameraView.getPlaySounds());
         cameraView.setPlaySounds(false);
-        assertEquals(cameraView.getPlaySounds(), false);
+        assertFalse(cameraView.getPlaySounds());
+    }
+
+    @Test
+    public void testSetUseDeviceOrientation() {
+        cameraView.setUseDeviceOrientation(true);
+        assertTrue(cameraView.getUseDeviceOrientation());
+        cameraView.setUseDeviceOrientation(false);
+        assertFalse(cameraView.getUseDeviceOrientation());
     }
 
     @Test
     public void testSetFlash() {
         cameraView.set(Flash.TORCH);
-        assertEquals(cameraView.getFlash(), Flash.TORCH);
+        assertEquals(cameraView.get(Flash.class), Flash.TORCH);
         cameraView.set(Flash.OFF);
-        assertEquals(cameraView.getFlash(), Flash.OFF);
+        assertEquals(cameraView.get(Flash.class), Flash.OFF);
     }
 
     @Test
     public void testSetFacing() {
         cameraView.set(Facing.FRONT);
-        assertEquals(cameraView.getFacing(), Facing.FRONT);
+        assertEquals(cameraView.get(Facing.class), Facing.FRONT);
         cameraView.set(Facing.BACK);
-        assertEquals(cameraView.getFacing(), Facing.BACK);
+        assertEquals(cameraView.get(Facing.class), Facing.BACK);
     }
 
     @Test
     public void testToggleFacing() {
         cameraView.set(Facing.FRONT);
         cameraView.toggleFacing();
-        assertEquals(cameraView.getFacing(), Facing.BACK);
+        assertEquals(cameraView.get(Facing.class), Facing.BACK);
         cameraView.toggleFacing();
-        assertEquals(cameraView.getFacing(), Facing.FRONT);
+        assertEquals(cameraView.get(Facing.class), Facing.FRONT);
     }
 
     @Test
     public void testSetGrid() {
         cameraView.set(Grid.DRAW_3X3);
-        assertEquals(cameraView.getGrid(), Grid.DRAW_3X3);
+        assertEquals(cameraView.get(Grid.class), Grid.DRAW_3X3);
         cameraView.set(Grid.OFF);
-        assertEquals(cameraView.getGrid(), Grid.OFF);
+        assertEquals(cameraView.get(Grid.class), Grid.OFF);
     }
 
     @Test
     public void testSetWhiteBalance() {
         cameraView.set(WhiteBalance.CLOUDY);
-        assertEquals(cameraView.getWhiteBalance(), WhiteBalance.CLOUDY);
+        assertEquals(cameraView.get(WhiteBalance.class), WhiteBalance.CLOUDY);
         cameraView.set(WhiteBalance.AUTO);
-        assertEquals(cameraView.getWhiteBalance(), WhiteBalance.AUTO);
+        assertEquals(cameraView.get(WhiteBalance.class), WhiteBalance.AUTO);
     }
 
     @Test
     public void testMode() {
         cameraView.set(Mode.VIDEO);
-        assertEquals(cameraView.getMode(), Mode.VIDEO);
+        assertEquals(cameraView.get(Mode.class), Mode.VIDEO);
         cameraView.set(Mode.PICTURE);
-        assertEquals(cameraView.getMode(), Mode.PICTURE);
+        assertEquals(cameraView.get(Mode.class), Mode.PICTURE);
     }
 
     @Test
     public void testHdr() {
         cameraView.set(Hdr.ON);
-        assertEquals(cameraView.getHdr(), Hdr.ON);
+        assertEquals(cameraView.get(Hdr.class), Hdr.ON);
         cameraView.set(Hdr.OFF);
-        assertEquals(cameraView.getHdr(), Hdr.OFF);
+        assertEquals(cameraView.get(Hdr.class), Hdr.OFF);
     }
 
     @Test
     public void testAudio() {
         cameraView.set(Audio.ON);
-        assertEquals(cameraView.getAudio(), Audio.ON);
+        assertEquals(cameraView.get(Audio.class), Audio.ON);
         cameraView.set(Audio.OFF);
-        assertEquals(cameraView.getAudio(), Audio.OFF);
+        assertEquals(cameraView.get(Audio.class), Audio.OFF);
+        cameraView.set(Audio.MONO);
+        assertEquals(cameraView.get(Audio.class), Audio.MONO);
+        cameraView.set(Audio.STEREO);
+        assertEquals(cameraView.get(Audio.class), Audio.STEREO);
     }
 
     @Test
     public void testVideoCodec() {
         cameraView.set(VideoCodec.H_263);
-        assertEquals(cameraView.getVideoCodec(), VideoCodec.H_263);
+        assertEquals(cameraView.get(VideoCodec.class), VideoCodec.H_263);
         cameraView.set(VideoCodec.H_264);
-        assertEquals(cameraView.getVideoCodec(), VideoCodec.H_264);
+        assertEquals(cameraView.get(VideoCodec.class), VideoCodec.H_264);
     }
 
     @Test
@@ -601,7 +769,6 @@ public class CameraViewTest extends BaseTest {
 
     //region Lists of listeners and processors
 
-    @SuppressWarnings("UseBulkOperation")
     @Test
     public void testCameraListenerList() {
         assertTrue(cameraView.mListeners.isEmpty());
@@ -629,7 +796,6 @@ public class CameraViewTest extends BaseTest {
         }
     }
 
-    @SuppressWarnings({"NullableProblems", "UseBulkOperation"})
     @Test
     public void testFrameProcessorsList() {
         assertTrue(cameraView.mFrameProcessors.isEmpty());
@@ -667,11 +833,110 @@ public class CameraViewTest extends BaseTest {
     public void testSetSnapshotMaxSize() {
         cameraView.setSnapshotMaxWidth(500);
         cameraView.setSnapshotMaxHeight(1000);
-        assertEquals(mockController.mSnapshotMaxWidth, 500);
-        assertEquals(mockController.mSnapshotMaxHeight, 1000);
+        assertEquals(mockController.getSnapshotMaxWidth(), 500);
+        assertEquals(mockController.getSnapshotMaxHeight(), 1000);
     }
 
     //endregion
 
+    //region MarkerLayout
+
+    @Test
+    public void testMarkerLayout_forAutoFocus_onMarker() {
+        MarkerLayout markerLayout = mock(MarkerLayout.class);
+        AutoFocusMarker marker = new DefaultAutoFocusMarker();
+        cameraView.mMarkerLayout = markerLayout;
+        cameraView.setAutoFocusMarker(marker);
+        verify(markerLayout, times(1)).onMarker(MarkerLayout.TYPE_AUTOFOCUS, marker);
+    }
+
+    @Test
+    public void testMarkerLayout_forAutoFocus_onEvent() {
+        MarkerLayout markerLayout = spy(cameraView.mMarkerLayout);
+        cameraView.mMarkerLayout = markerLayout;
+        final PointF point = new PointF(0, 0);
+        final PointF[] points = new PointF[]{ point };
+        final Op<Boolean> op = new Op<>(true);
+        doEndOp(op, true).when(markerLayout).onEvent(MarkerLayout.TYPE_AUTOFOCUS, points);
+        cameraView.mCameraCallbacks.dispatchOnFocusStart(Gesture.TAP, point);
+        assertNotNull(op.await(100));
+    }
+
+    //endregion
+
+    //region Overlays
+
+    @Test
+    public void testOverlays_generateLayoutParams() {
+        cameraView.mOverlayLayout = spy(cameraView.mOverlayLayout);
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+        View overlay = inflater.inflate(com.otaliastudios.cameraview.test.R.layout.overlay, cameraView, false);
+        assertTrue(overlay.getLayoutParams() instanceof OverlayLayout.LayoutParams);
+        verify(cameraView.mOverlayLayout, times(1)).isOverlay(any(AttributeSet.class));
+        verify(cameraView.mOverlayLayout, times(1)).generateLayoutParams(any(AttributeSet.class));
+
+    }
+
+    @Test
+    public void testOverlays_dontGenerateLayoutParams() {
+        cameraView.mOverlayLayout = spy(cameraView.mOverlayLayout);
+        LayoutInflater inflater = LayoutInflater.from(getContext());
+        View overlay = inflater.inflate(com.otaliastudios.cameraview.test.R.layout.not_overlay, cameraView, false);
+        assertFalse(overlay.getLayoutParams() instanceof OverlayLayout.LayoutParams);
+        verify(cameraView.mOverlayLayout, times(1)).isOverlay(any(AttributeSet.class));
+        verify(cameraView.mOverlayLayout, never()).generateLayoutParams(any(AttributeSet.class));
+    }
+
+    @Test
+    public void testOverlays_addOverlayView() {
+        cameraView.mOverlayLayout = spy(cameraView.mOverlayLayout);
+        View overlay = new View(getContext());
+        OverlayLayout.LayoutParams params = new OverlayLayout.LayoutParams(10, 10);
+        int count = cameraView.getChildCount();
+        cameraView.addView(overlay, 0, params);
+        assertEquals(count, cameraView.getChildCount()); // Not added to CameraView
+        verify(cameraView.mOverlayLayout, times(1)).isOverlay(params);
+        verify(cameraView.mOverlayLayout, times(1)).addView(overlay, params);
+    }
+
+    @Test
+    public void testOverlays_dontAddOverlayView() {
+        cameraView.mOverlayLayout = spy(cameraView.mOverlayLayout);
+        View overlay = new View(getContext());
+        ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(10, 10);
+        int count = cameraView.getChildCount();
+        cameraView.addView(overlay, 0, params);
+        assertEquals(count + 1, cameraView.getChildCount());
+        verify(cameraView.mOverlayLayout, times(1)).isOverlay(params);
+        verify(cameraView.mOverlayLayout, never()).addView(overlay, params);
+    }
+
+    //endregion
     // TODO: test permissions
+
+    //region Filter
+
+    @Test(expected = RuntimeException.class)
+    public void testSetFilter_notExperimental() {
+        cameraView.setExperimental(false);
+        cameraView.setFilter(Filters.AUTO_FIX.newInstance());
+    }
+
+    @Test
+    public void testSetFilter_notExperimental_noFilter() {
+        cameraView.setExperimental(false);
+        cameraView.setFilter(Filters.NONE.newInstance());
+        // no exception thrown
+    }
+
+    @Test
+    public void testSetFilter() {
+        cameraView.setExperimental(true);
+        Filter filter = Filters.AUTO_FIX.newInstance();
+        cameraView.setFilter(filter);
+        verify(mockPreview, times(1)).setFilter(filter);
+        assertEquals(filter, cameraView.getFilter());
+        //noinspection ResultOfMethodCallIgnored
+        verify(mockPreview, times(1)).getCurrentFilter();
+    }
 }

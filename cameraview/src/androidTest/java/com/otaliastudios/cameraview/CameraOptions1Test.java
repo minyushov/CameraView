@@ -3,6 +3,20 @@ package com.otaliastudios.cameraview;
 
 import android.hardware.Camera;
 
+import com.otaliastudios.cameraview.controls.Audio;
+import com.otaliastudios.cameraview.controls.Engine;
+import com.otaliastudios.cameraview.controls.Facing;
+import com.otaliastudios.cameraview.controls.Flash;
+import com.otaliastudios.cameraview.engine.Mapper;
+import com.otaliastudios.cameraview.gesture.GestureAction;
+import com.otaliastudios.cameraview.controls.Grid;
+import com.otaliastudios.cameraview.controls.Hdr;
+import com.otaliastudios.cameraview.controls.Mode;
+import com.otaliastudios.cameraview.controls.VideoCodec;
+import com.otaliastudios.cameraview.controls.WhiteBalance;
+import com.otaliastudios.cameraview.size.AspectRatio;
+import com.otaliastudios.cameraview.size.Size;
+
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
@@ -203,11 +217,12 @@ public class CameraOptions1Test extends BaseTest {
         when(params.getMinExposureCompensation()).thenReturn(0);
 
         CameraOptions o = new CameraOptions(params, false);
-        assertFalse(o.supports(GestureAction.FOCUS));
-        assertFalse(o.supports(GestureAction.FOCUS_WITH_MARKER));
-        assertTrue(o.supports(GestureAction.CAPTURE));
+        assertFalse(o.supports(GestureAction.AUTO_FOCUS));
+        assertTrue(o.supports(GestureAction.TAKE_PICTURE));
         assertTrue(o.supports(GestureAction.NONE));
         assertTrue(o.supports(GestureAction.ZOOM));
+        assertTrue(o.supports(GestureAction.FILTER_CONTROL_1));
+        assertTrue(o.supports(GestureAction.FILTER_CONTROL_2));
         assertFalse(o.supports(GestureAction.EXPOSURE_CORRECTION));
     }
 
@@ -237,7 +252,7 @@ public class CameraOptions1Test extends BaseTest {
         }
 
         CameraOptions o = new CameraOptions(mock(Camera.Parameters.class), false);
-        Mapper m = new Mapper1();
+        Mapper m = Mapper.get(Engine.CAMERA1);
         Collection<Facing> s = o.getSupportedControls(Facing.class);
         assertEquals(s.size(), supported.size());
         for (Facing facing : s) {

@@ -4,16 +4,10 @@
 [![Issues](https://img.shields.io/github/issues-raw/natario1/CameraView.svg)](https://github.com/natario1/CameraView/issues)
 [![Funding](https://img.shields.io/opencollective/all/CameraView.svg?colorB=r)](https://natario1.github.io/CameraView/extra/donate)
 
-*This is a new major version (v2) of the library. It includes breaking changes, signature changes and new functionality.
-Keep reading if interested, or head to the legacy-v1 branch to read v1 documentation and info.*
-
-*The v2 version is still in beta and its API surface might still change. Functions might be renamed,
-options might be removed (though they probably won't), signatures might change. If this is a problem,
-please wait for the final release and keep using v1*.
-
+&#10240;  <!-- Hack to add whitespace -->
 
 <p align="center">
-  <img src="docs/static/icon.png" vspace="10" width="250" height="250">
+  <img src="docs/static/banner.png" width="100%">
 </p>
 
 # CameraView
@@ -22,31 +16,35 @@ CameraView is a well documented, high-level library that makes capturing picture
 addressing most of the common issues and needs, and still leaving you with flexibility where needed.
 
 ```groovy
-compile 'com.otaliastudios:cameraview:2.0.0-beta05'
+api 'com.otaliastudios:cameraview:2.1.0'
 ```
 
 - Fast & reliable
-- Gestures support
-- Frame processing support
-- OpenGL powered preview
-- Take high-quality content with `takePicture` and `takeVideo`
-- Take super-fast snapshots with `takePictureSnapshot` and `takeVideoSnapshot`
-- Smart sizing: create a `CameraView` of any size
-- Control HDR, flash, zoom, white balance, exposure, location, grid drawing & more
-- Lightweight: the only dep. is support `ExifInterface`
+- Gestures support [[docs]](https://natario1.github.io/CameraView/docs/gestures.html)
+- Real-time filters [[docs]](https://natario1.github.io/CameraView/docs/filters.html)
+- Camera1 or Camera2 powered engine [[docs]](https://natario1.github.io/CameraView/docs/previews.html)
+- Frame processing support [[docs]](https://natario1.github.io/CameraView/docs/frame-processing.html)
+- Watermarks & animated overlays [[docs]](https://natario1.github.io/CameraView/docs/watermarks-and-overlays.html)
+- OpenGL powered preview [[docs]](https://natario1.github.io/CameraView/docs/previews.html)
+- Take high-quality content with `takePicture` and `takeVideo` [[docs]](https://natario1.github.io/CameraView/docs/capturing-media.html)
+- Take super-fast snapshots with `takePictureSnapshot` and `takeVideoSnapshot` [[docs]](https://natario1.github.io/CameraView/docs/capturing-media.html)
+- Smart sizing: create a `CameraView` of any size [[docs]](https://natario1.github.io/CameraView/docs/preview-size.html)
+- Control HDR, flash, zoom, white balance, exposure, location, grid drawing & more [[docs]](https://natario1.github.io/CameraView/docs/controls.html)
+- Lightweight
 - Works down to API level 15
 - Well tested
 
 Read the [official website](https://natario1.github.io/CameraView) for setup instructions and documentation.
+You might also be interested in [changelog](https://natario1.github.io/CameraView/about/changelog.html)
+or in the [v1 migration guide](https://natario1.github.io/CameraView/extra/v1-migration-guide.html).
 
-- Coming from v1? Take a look at the [migration guide](https://natario1.github.io/CameraView/extra/v1-migration-guide.html)
-- Changelog is hosted [here](https://natario1.github.io/CameraView/about/changelog.html)
+&#10240;  <!-- Hack to add whitespace -->
 
-<p>
-  <img src="docs/static/screen1.jpg" width="250" vspace="20" hspace="5">
-  <img src="docs/static/screen2.jpg" width="250" vspace="20" hspace="5">
-  <img src="docs/static/screen3.jpg" width="250" vspace="20" hspace="5">
+<p align="center">
+  <img src="docs/static/screen1.png" width="250" hspace="5"><img src="docs/static/screen2.png" width="250" hspace="5"><img src="docs/static/screen3.png" width="250" hspace="5">
 </p>
+
+&#10240;  <!-- Hack to add whitespace -->
 
 If you like the project, use it with profit, or simply want to thank back, please consider [donating
 to the project](https://natario1.github.io/CameraView/extra/donate) now! You can either make a one time
@@ -54,6 +52,71 @@ donation or become a sponsor, in which case your company logo will immediately s
 
 Thank you for any contribution - it is a nice reward for what has been done until now, and a 
 motivation boost to push the library forward.
+
+```xml
+<com.otaliastudios.cameraview.CameraView
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    app:cameraPictureSizeMinWidth="@integer/picture_min_width"
+    app:cameraPictureSizeMinHeight="@integer/picture_min_height"
+    app:cameraPictureSizeMaxWidth="@integer/picture_max_width"
+    app:cameraPictureSizeMaxHeight="@integer/picture_max_height"
+    app:cameraPictureSizeMinArea="@integer/picture_min_area"
+    app:cameraPictureSizeMaxArea="@integer/picture_max_area"
+    app:cameraPictureSizeSmallest="false|true"
+    app:cameraPictureSizeBiggest="false|true"
+    app:cameraPictureSizeAspectRatio="@string/video_ratio"
+    app:cameraVideoSizeMinWidth="@integer/video_min_width"
+    app:cameraVideoSizeMinHeight="@integer/video_min_height"
+    app:cameraVideoSizeMaxWidth="@integer/video_max_width"
+    app:cameraVideoSizeMaxHeight="@integer/video_max_height"
+    app:cameraVideoSizeMinArea="@integer/video_min_area"
+    app:cameraVideoSizeMaxArea="@integer/video_max_area"
+    app:cameraVideoSizeSmallest="false|true"
+    app:cameraVideoSizeBiggest="false|true"
+    app:cameraVideoSizeAspectRatio="@string/video_ratio"
+    app:cameraSnapshotMaxWidth="@integer/snapshot_max_width"
+    app:cameraSnapshotMaxHeight="@integer/snapshot_max_height"
+    app:cameraVideoBitRate="@integer/video_bit_rate"
+    app:cameraAudioBitRate="@integer/audio_bit_rate"
+    app:cameraGestureTap="none|autoFocus|takePicture"
+    app:cameraGestureLongTap="none|autoFocus|takePicture"
+    app:cameraGesturePinch="none|zoom|exposureCorrection|filterControl1|filterControl2"
+    app:cameraGestureScrollHorizontal="none|zoom|exposureCorrection|filterControl1|filterControl2"
+    app:cameraGestureScrollVertical="none|zoom|exposureCorrection|filterControl1|filterControl2"
+    app:cameraEngine="camera1|camera2"
+    app:cameraPreview="glSurface|surface|texture"
+    app:cameraFacing="back|front"
+    app:cameraHdr="on|off"
+    app:cameraFlash="on|auto|torch|off"
+    app:cameraWhiteBalance="auto|cloudy|daylight|fluorescent|incandescent"
+    app:cameraMode="picture|video"
+    app:cameraAudio="on|off|mono|stereo"
+    app:cameraGrid="draw3x3|draw4x4|drawPhi|off"
+    app:cameraGridColor="@color/grid_color"
+    app:cameraPlaySounds="true|false"
+    app:cameraVideoMaxSize="@integer/video_max_size"
+    app:cameraVideoMaxDuration="@integer/video_max_duration"
+    app:cameraVideoCodec="deviceDefault|h264|h263"
+    app:cameraAutoFocusResetDelay="@integer/autofocus_delay"
+    app:cameraAutoFocusMarker="@string/cameraview_default_autofocus_marker"
+    app:cameraUseDeviceOrientation="true|false"
+    app:cameraFilter="@string/real_time_filter"
+    app:cameraExperimental="false|true">
+    
+    <!-- Watermark! -->
+    <ImageView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:src="@drawable/watermark"
+        app:layout_drawOnPreview="true|false"
+        app:layout_drawOnPictureSnapshot="true|false"
+        app:layout_drawOnVideoSnapshot="true|false"/>
+        
+</com.otaliastudios.cameraview.CameraView>
+```
 
 ## Backers
 

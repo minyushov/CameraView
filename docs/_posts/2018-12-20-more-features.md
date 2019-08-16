@@ -4,7 +4,7 @@ title: "More features"
 subtitle: "Undocumented features & more"
 description: "Undocumented features & more"
 category: docs
-order: 13
+order: 15
 date: 2018-12-20 20:41:20
 disqus: 1
 ---
@@ -16,7 +16,8 @@ disqus: 1
     app:cameraPlaySounds="true|false"
     app:cameraGrid="off|draw3x3|draw4x4|drawPhi"
     app:cameraGridColor="@color/black"
-    app:cameraAutoFocusResetDelay="0"/>
+    app:cameraAutoFocusResetDelay="0"
+    app:cameraUseDeviceOrientation="true"/>
 ```
 
 ##### cameraPlaySounds
@@ -57,19 +58,17 @@ cameraView.setGridColor(Color.WHITE);
 cameraView.setGridColor(Color.BLACK);
 ```
 
-##### cameraAutoFocusResetDelay
+##### cameraUseDeviceOrientation
 
-Lets you control how an auto-focus operation is reset after completed.
-Setting a value <= 0 or == Long.MAX_VALUE will not reset the auto-focus.
-This is useful for low end devices that have slow auto-focus capabilities.
-Defaults to 3 seconds.
+Controls whether we should consider the device orientation for picture and video outputs.
+This defaults to true, but can be set to false for specific usages, where you don't want the
+output to be rotated based on the device rotation at the moment of capturing.
+Defaults to true.
 
 ```java
-cameraView.setCameraAutoFocusResetDelay(1000);  // 1 second
-cameraView.setCameraAutoFocusResetDelay(0);  // NO reset
-cameraView.setCameraAutoFocusResetDelay(-1);  // NO reset
-cameraView.setCameraAutoFocusResetDelay(Long.MAX_VALUE);  // NO reset
-
+cameraView.setUseDeviceOrientation(true); // rotate media 
+cameraView.setUseDeviceOrientation(false); // don't
+```
 
 ### UI Orientation
 
